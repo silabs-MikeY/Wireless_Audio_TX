@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "em_core.h": "c",
+        "em_cmu.h": "c"
+    },
+    "cortex-debug.variableUseNaturalFormat": true
+}

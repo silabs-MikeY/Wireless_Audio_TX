@@ -1,0 +1,16 @@
+#CRC Codes for initially generated config files -- do not modify!
+dmadrv_config.h=281221886
+rail/radio_settings.radioconf=-1805597981
+sl_clock_manager_oscillator_config.h=-624330189
+sl_clock_manager_tree_config.h=-640068785
+sl_core_config.h=-2018153270
+sl_device_init_dcdc_config.h=-1956854636
+sl_device_init_emu_config.h=1238190016
+sl_iostream_eusart_inst_config.h=1512386507
+sl_memory_manager_region_config.h=-381710085
+sl_rail_util_callbacks_config.h=1839833484
+sl_rail_util_init_inst0_config.h=375013371
+sl_rail_util_init_inst_config.h=366300851
+sl_rail_util_pa_config.h=-1351546299
+sl_rail_util_protocol_config.h=-1920416827
+sl_rail_util_sequencer_config.h=871733501

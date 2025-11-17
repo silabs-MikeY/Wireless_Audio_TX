@@ -1,0 +1,4 @@
+/Users/miyablon/SimplicityStudio/v6_workspace/TX_Board/cmake_gcc/build/CMakeFiles/slc.dir
+/Users/miyablon/SimplicityStudio/v6_workspace/TX_Board/cmake_gcc/build/CMakeFiles/TX_Board.dir
+/Users/miyablon/SimplicityStudio/v6_workspace/TX_Board/cmake_gcc/build/CMakeFiles/edit_cache.dir
+/Users/miyablon/SimplicityStudio/v6_workspace/TX_Board/cmake_gcc/build/CMakeFiles/rebuild_cache.dir

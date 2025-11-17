@@ -1,0 +1,33 @@
+{
+    "configurations": [
+        {
+            "name": "TX_Board_silabs_debug",
+            "cwd": "${workspaceFolder}",
+            "type": "cortex-debug",
+            "request": "launch",
+            "serverpath": "/Users/miyablon/.silabs/slt/installs/archive/exx32-v6.0.31/JLinkGDBServerCLExe",
+            "servertype": "jlink",
+            "gdbPath": "/Users/miyablon/.silabs/slt/installs/archive/exx32-v6.0.31/arm-none-eabi-gdb",
+            "device": "EFR32MG24BxxxF1536",
+            "svdFile": "/var/folders/hz/l8xylzmn6cb3lx6bh_ncgd_h0000gp/T/silabs_extension/silabs_extension/svd/EFR32MG24B220F1536IM48.svd",
+            "runToEntryPoint": "main",
+            "rtos": "FreeRTOS",
+            "showDevDebugOutput": "raw",
+            "executable": "/Users/miyablon/SimplicityStudio/v6_workspace/TX_Board/cmake_gcc/build/base/TX_Board.out",
+            "serialNumber": "440267973",
+            "breakAfterReset": true,
+            "overrideLaunchCommands": [
+                "monitor reset",
+                "exec-file /Users/miyablon/SimplicityStudio/v6_workspace/TX_Board/cmake_gcc/build/base/TX_Board.out",
+                "load",
+                "set $pc = __Vectors[1]",
+                "set $sp = __Vectors[0]"
+            ],
+            "overrideResetCommands": [
+                "monitor reset",
+                "set $pc = __Vectors[1]",
+                "set $sp = __Vectors[0]"
+            ]
+        }
+    ]
+}

@@ -1,0 +1,376 @@
+#include "debug.h"
+
+#define DEBUG 1
+
+static void save_and_reset_counters(void);
+
+bool printing_counters_flag = false;
+uint32_t printing_counters_index = 0;
+
+#if (DEBUG==1)
+
+typedef struct{
+  uint32_t timestamp_last_reset;
+  uint32_t app_process_action_runs;
+  uint32_t number_of_TX_attempts;
+  uint32_t number_of_TX_success;
+  uint32_t number_of_TX_failed;
+  uint32_t number_of_TX_failed_to_send;
+  uint32_t number_of_TX_abort;
+  uint32_t number_of_TX_block;
+  uint32_t number_of_TX_underflow;
+  uint32_t number_of_TX_busy;
+  uint32_t number_of_TX_missed;
+  uint32_t samples_received_left;
+  uint32_t samples_received_right;
+  uint32_t packet_buffer_overflows;
+  uint32_t sequence_number;
+} debug_counters_t;
+
+volatile debug_counters_t counters;
+debug_counters_t non_volatile_counters;
+
+#endif
+
+//static void reset_counters(void)
+//{
+//#if (DEBUG==1)
+//  CORE_DECLARE_IRQ_STATE;
+//  CORE_ENTER_CRITICAL();
+//  memset(&counters,0,sizeof(debug_counters_t));
+//  counters.timestamp_last_reset = DWT->CYCCNT;
+//  CORE_EXIT_CRITICAL();
+//#endif
+//}
+
+static void save_and_reset_counters(void)
+{
+#if (DEBUG==1)
+  CORE_DECLARE_IRQ_STATE;
+  CORE_ENTER_CRITICAL();
+  memcpy(&non_volatile_counters,&counters,sizeof(debug_counters_t));
+  memset(&counters,0,sizeof(debug_counters_t));
+  counters.timestamp_last_reset = DWT->CYCCNT;
+  CORE_EXIT_CRITICAL();
+#endif
+}
+
+void debug__init_counters(void)
+{
+#if (DEBUG==1)
+  save_and_reset_counters();
+#endif
+}
+
+void debug__set_sequence_number(uint16_t sequence_number)
+{
+#if (DEBUG==1)
+  counters.sequence_number = sequence_number;
+#endif
+}
+
+void debug__increment_number_of_left_samples_receiver(uint32_t number_of_new_samples)
+{
+#if (DEBUG==1)
+  counters.samples_received_left += number_of_new_samples;
+#endif
+}
+
+void debug__increment_number_of_right_samples_receiver(uint32_t number_of_new_samples)
+{
+#if (DEBUG==1)
+  counters.samples_received_right += number_of_new_samples;
+#endif
+}
+
+void debug__increment_number_of_TX_attempts(void)
+{
+#if (DEBUG==1)
+  counters.number_of_TX_attempts++;
+#endif
+}
+
+void debug__log_TX_success(void)
+{
+#if (DEBUG==1)
+  counters.number_of_TX_success++;
+#endif
+}
+
+void debug__log_TX_fail(void)
+{
+#if (DEBUG==1)
+  counters.number_of_TX_failed_to_send++;
+#endif
+}
+void debug__log_TX_abort(void)
+{
+#if (DEBUG==1)
+  counters.number_of_TX_abort++;
+#endif
+}
+void debug__log_TX_block(void)
+{
+#if (DEBUG==1)
+  counters.number_of_TX_block++;
+#endif
+}
+void debug__log_TX_underflow(void)
+{
+#if (DEBUG==1)
+  counters.number_of_TX_underflow++;
+#endif
+}
+void debug__log_TX_busy(void)
+{
+#if (DEBUG==1)
+  counters.number_of_TX_busy++;
+#endif
+}
+void debug__log_TX_missed(void)
+{
+#if (DEBUG==1)
+  counters.number_of_TX_missed++;
+#endif
+}
+
+void debug__increment_number_of_TX_failed(void)
+{
+#if (DEBUG==1)
+  counters.number_of_TX_failed++;
+#endif
+}
+
+void debug__increment_app_process_action_runs(void)
+{
+#if (DEBUG==1)
+  counters.app_process_action_runs++;
+#endif
+}
+
+void debug__increment_packet_buffer_overflows(void)
+{
+#if (DEBUG==1)
+  counters.packet_buffer_overflows++;
+#endif
+}
+
+void debug__one_second_print(void)
+{
+#if (DEBUG==1)
+  save_and_reset_counters();
+  printf("Timestamp: %u Print Counters\n", (unsigned int)scheduler__get_millisecond_ticks());
+  printing_counters_flag = true;
+  printing_counters_index = 0;
+#endif
+}
+
+void debug__run_debug_print_state_machine(void)
+{
+#define NUMBER_OF_PRINTS 19
+
+  if (printing_counters_flag == true)
+    {
+      uint32_t core_ticks_since_last_run = DWT->CYCCNT - non_volatile_counters.timestamp_last_reset;
+      uint32_t core_speed = CMU_ClockFreqGet(cmuClock_CORE);
+      switch(printing_counters_index)
+      {
+        case 0:
+          printf("-  Core Speed %u\n", (unsigned int)core_speed);
+          break;
+        case 1:
+          printf("-  Core Ticks Since Last Save: %u\n", (unsigned int)core_ticks_since_last_run);
+          break;
+        case 2:
+          printf("-  Core Ticks Since Last Save: (milliseconds): %u\n", core_ticks_since_last_run / (core_speed/1000));
+          break;
+        case 3:
+          printf("-  Ticks Between SysTicks: %u\n", (unsigned int)SysTick->LOAD);
+          break;
+        case 4:
+          printf("-  App Process Action Runs: %u\n", (unsigned int)non_volatile_counters.app_process_action_runs);
+          break;
+        case 5:
+          printf("-  Number of TX Send Attempt Success: %u\n", (unsigned int)non_volatile_counters.number_of_TX_attempts);
+          break;
+        case 6:
+          printf("-  Number of TX Send Attempt Failed: %u\n", (unsigned int)non_volatile_counters.number_of_TX_failed);
+          break;
+        case 7:
+          printf("-  Number of TX Sent Successes: %u\n", (unsigned int)non_volatile_counters.number_of_TX_success);
+          break;
+        case 8:
+          printf("-  Number of TX Sent Failed: %u\n", (unsigned int)non_volatile_counters.number_of_TX_failed_to_send);
+          break;
+        case 9:
+          if (non_volatile_counters.number_of_TX_failed_to_send > 0)
+            {
+              printf("  -  Number of TX Sent Failed Abort: %u\n", (unsigned int)non_volatile_counters.number_of_TX_abort);
+            }
+          break;
+        case 10:
+          if (non_volatile_counters.number_of_TX_failed_to_send > 0)
+            {
+              printf("  -  Number of TX Sent Failed Block: %u\n", (unsigned int)non_volatile_counters.number_of_TX_block);
+            }
+          break;
+        case 11:
+          if (non_volatile_counters.number_of_TX_failed_to_send > 0)
+            {
+              printf("  -  Number of TX Sent Failed Underflow: %u\n", (unsigned int)non_volatile_counters.number_of_TX_underflow);
+            }
+          break;
+        case 12:
+          if (non_volatile_counters.number_of_TX_failed_to_send > 0)
+            {
+              printf("  -  Number of TX Sent Failed Busy: %u\n", (unsigned int)non_volatile_counters.number_of_TX_busy);
+            }
+          break;
+        case 13:
+          if (non_volatile_counters.number_of_TX_failed_to_send > 0)
+            {
+              printf("  -  Number of TX Sent Failed Missed: %u\n", (unsigned int)non_volatile_counters.number_of_TX_missed);
+            }
+          break;
+        case 14:
+          printf("-  Number of Bytes Sent: %u\n", (unsigned int)non_volatile_counters.number_of_TX_success * 256);
+          break;
+        case 15:
+          printf("-  Number of Samples Sent: %u\n", (unsigned int)non_volatile_counters.number_of_TX_success * 256  / 4);
+          break;
+        case 16:
+          printf("-  Number of Packet Buffer Overflows: %u\n", (unsigned int)non_volatile_counters.packet_buffer_overflows);
+          break;
+        case 17:
+          printf("-  Number of Left Samples Received: %u\n", (unsigned int)non_volatile_counters.samples_received_left);
+          break;
+        case 18:
+          printf("-  Number of Right Samples Received: %u\n", (unsigned int)non_volatile_counters.samples_received_right);
+          break;
+        case 19:
+          printf("-  Sequence Number: %u\n", (unsigned int)non_volatile_counters.sequence_number);
+          break;
+        default:
+          printf("Invalid Print Index\n");
+          break;
+      }
+      printing_counters_index++;
+      if (printing_counters_index > NUMBER_OF_PRINTS)
+        {
+          printf("\n");
+          printing_counters_flag = false;
+        }
+    }
+}
+
+void debug__audio_buffer_printf(const char *format, ...)
+{
+  va_list args;
+  va_start(args, format);
+
+  printf("Time: %u - ", (unsigned int)scheduler__get_millisecond_ticks());
+  vprintf(format, args);
+
+  va_end(args);
+}
+/*
+#if (DEBUG==1)
+//  save_and_reset_counters();
+//  printf("Timestamp: %u\n", (unsigned int)get_millisecond_ticks());
+//  uint32_t core_ticks_since_last_run = DWT->CYCCNT - non_volatile_counters.timestamp_last_reset;
+//  uint32_t core_speed = CMU_ClockFreqGet(cmuClock_CORE);
+//  printf("-  Core Speed %u\n", (unsigned int)core_speed);
+//  printf("-  Core Ticks Since Last Save: %u\n", (unsigned int)core_ticks_since_last_run);
+//  printf("-  Core Ticks Since Last Save: (milliseconds): %u\n", core_ticks_since_last_run / (core_speed/1000));
+//  printf("-  Ticks Between SysTicks: %u\n", (unsigned int)SysTick->LOAD);
+//  printf("-  App Process Action Runs: %u\n", (unsigned int)non_volatile_counters.app_process_action_runs);
+//  printf("-  Number of TX Send Attempt Success: %u\n", (unsigned int)non_volatile_counters.number_of_TX_attempts);
+//  printf("-  Number of TX Send Attempt Failed: %u\n", (unsigned int)non_volatile_counters.number_of_TX_failed);
+//  printf("-  Number of TX Sent Successes: %u\n", (unsigned int)non_volatile_counters.number_of_TX_success);
+//  printf("-  Number of Bytes Sent: %u\n", (unsigned int)non_volatile_counters.number_of_TX_success * 256);
+//  printf("-  Number of Samples Sent: %u\n", (unsigned int)non_volatile_counters.number_of_TX_success * 256  / 4);
+//  printf("\n");
+  static char buffer[100];
+  static uint32_t length;
+  //  sl_iostream_write(sl_iostream_inst_handle,buffer,4);
+
+  save_and_reset_counters();
+  length = sprintf(buffer,"Timestamp: %u\n", (unsigned int)get_millisecond_ticks());
+  sl_iostream_write(sl_iostream_get_handle("swo"),buffer,length);
+
+  uint32_t core_ticks_since_last_run = DWT->CYCCNT - non_volatile_counters.timestamp_last_reset;
+  uint32_t core_speed = CMU_ClockFreqGet(cmuClock_CORE);
+
+//  printf("-  Core Speed %u\n", (unsigned int)core_speed);
+  length = sprintf(buffer,"-  Core Speed %u\n", (unsigned int)core_speed);
+  sl_iostream_write(sl_iostream_get_handle("swo"),buffer,length);
+
+//  printf("-  Core Ticks Since Last Save: %u\n", (unsigned int)core_ticks_since_last_run);
+  length = sprintf(buffer,"-  Core Ticks Since Last Save: %u\n", (unsigned int)core_ticks_since_last_run);
+  sl_iostream_write(sl_iostream_get_handle("swo"),buffer,length);
+
+//  printf("-  Core Ticks Since Last Save: (milliseconds): %u\n", core_ticks_since_last_run / (core_speed/1000));
+  length = sprintf(buffer,"-  Core Ticks Since Last Save: (milliseconds): %u\n", core_ticks_since_last_run / (core_speed/1000));
+  sl_iostream_write(sl_iostream_get_handle("swo"),buffer,length);
+
+//  printf("-  Ticks Between SysTicks: %u\n", (unsigned int)SysTick->LOAD);
+  length = sprintf(buffer,"-  Ticks Between SysTicks: %u\n", (unsigned int)SysTick->LOAD);
+  sl_iostream_write(sl_iostream_get_handle("swo"),buffer,length);
+
+//  printf("-  App Process Action Runs: %u\n", (unsigned int)non_volatile_counters.app_process_action_runs);
+  length = sprintf(buffer,"-  App Process Action Runs: %u\n", (unsigned int)non_volatile_counters.app_process_action_runs);
+  sl_iostream_write(sl_iostream_get_handle("swo"),buffer,length);
+
+//  printf("-  Number of TX Send Attempt Success: %u\n", (unsigned int)non_volatile_counters.number_of_TX_attempts);
+  length = sprintf(buffer,"-  Number of TX Send Attempt Success: %u\n", (unsigned int)non_volatile_counters.number_of_TX_attempts);
+  sl_iostream_write(sl_iostream_get_handle("swo"),buffer,length);
+
+//  printf("-  Number of TX Send Attempt Failed: %u\n", (unsigned int)non_volatile_counters.number_of_TX_failed);
+  length = sprintf(buffer,"-  Number of TX Send Attempt Failed: %u\n", (unsigned int)non_volatile_counters.number_of_TX_failed);
+  sl_iostream_write(sl_iostream_get_handle("swo"),buffer,length);
+
+//  printf("-  Number of TX Sent Successes: %u\n", (unsigned int)non_volatile_counters.number_of_TX_success);
+  length = sprintf(buffer,"-  Number of TX Sent Successes: %u\n", (unsigned int)non_volatile_counters.number_of_TX_success);
+  sl_iostream_write(sl_iostream_get_handle("swo"),buffer,length);
+
+//  printf("-  Number of Bytes Sent: %u\n", (unsigned int)non_volatile_counters.number_of_TX_success * 256);
+  length = sprintf(buffer,"-  Number of Bytes Sent: %u\n", (unsigned int)non_volatile_counters.number_of_TX_success * 256);
+  sl_iostream_write(sl_iostream_get_handle("swo"),buffer,length);
+
+//  printf("-  Number of Samples Sent: %u\n", (unsigned int)non_volatile_counters.number_of_TX_success * 256  / 4);
+  length = sprintf(buffer,"-  Number of Samples Sent: %u\n", (unsigned int)non_volatile_counters.number_of_TX_success * 256  / 4);
+  sl_iostream_write(sl_iostream_get_handle("swo"),buffer,length);
+
+  printf("\n");
+#endif
+//  for (uint8_t i=0 ; i<sl_iostream_instances_count ; i++)
+//    {
+//      printf("Handle: %u\n", (unsigned int)sl_iostream_instances_info[i]->handle);
+//      printf("Name: %s\n",sl_iostream_instances_info[i]->name);
+//      printf("Id: %u\n", (unsigned int)sl_iostream_instances_info[i]->periph_id);
+//      printf("Type: %X\n",sl_iostream_instances_info[i]->type);
+//      printf("\n");
+//    }
+//
+//  printf("EUSART En - %X\n",EUSART0->EN);
+//  printf("EUSART CFG0 - %X\n",EUSART0->CFG0);
+//  printf("EUSART CFG1 - %X\n",EUSART0->CFG1);
+//  printf("EUSART CFG2 - %X\n",EUSART0->CFG2);
+//  printf("EUSART CMD - %X\n",EUSART0->CMD);
+//  printf("EUSART IF - %X\n",EUSART0->IF);
+//  printf("EUSART IEN - %X\n",EUSART0->IEN);
+//  printf("EUSART Status - %X\n",EUSART0->EN_CLR);
+
+//  sl_iostream_set_default(sl_iostream_inst_handle);
+//  sl_iostream_set_default(sl_iostream_get_handle("inst"));
+//  printf("INST\n");
+//  static char buffer[10] = {'T','E','S','T'};
+//  sl_iostream_write(sl_iostream_inst_handle,buffer,4);
+//  EUSART0->TXDATA = 0xFF;
+//  EUSART0->CMD = 0x4;
+//;
+//  sl_iostream_set_default(sl_iostream_get_handle("swo"));
+//  printf("VCOM\n");
+//  printf("\n\n\n");
+}
+ */
