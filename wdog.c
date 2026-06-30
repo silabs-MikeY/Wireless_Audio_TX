@@ -5,7 +5,7 @@ void WDOG0_IRQHandler(void)
   uint32_t flags = WDOGn_IntGet(WDOG0);
   WDOGn_IntClear(WDOG0, flags);
 
-  printf("WDOG HIT\n");
+  debug__printf_to_buf_append_time(0,"WDOG HIT\n");
 
   reset_device();
   //assert(0);
@@ -22,7 +22,7 @@ void wdog__init(void)
   
   if (CMU_ClockSelectGet(cmuClock_WDOG0) != cmuSelect_ULFRCO)
   {
-    printf("WDOG Clock is Set Wrong: \n");
+    debug__printf_to_buf_append_time(0,"WDOG Clock is Set Wrong: \n");
     CMU_ClockSelectSet(cmuClock_WDOG0, cmuSelect_ULFRCO);
   }
 

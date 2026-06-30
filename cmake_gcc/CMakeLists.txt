@@ -54,8 +54,11 @@ add_custom_command(TARGET TX_Board
     COMMAND ${CMAKE_OBJCOPY} ${OBJCOPY_BIN_CMD}  "$<TARGET_FILE:TX_Board>" "$<TARGET_FILE_DIR:TX_Board>/$<TARGET_FILE_BASE_NAME:TX_Board>.bin" 
 )
 
+# Flashing after build is opt-in so normal builds stay standalone.
+option(TX_BOARD_FLASH_AFTER_BUILD "Flash TX_Board automatically after build" OFF)
+
 # Run post-build pipeline to perform additional post-processing
-if(post_build_command)
+if(TX_BOARD_FLASH_AFTER_BUILD AND post_build_command)
 add_custom_command(TARGET TX_Board
     POST_BUILD
     WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/..

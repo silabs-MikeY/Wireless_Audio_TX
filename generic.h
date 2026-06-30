@@ -81,7 +81,7 @@ void memcpy_from_volatile(uint8_t* destination, volatile uint8_t* source, uint32
 void memcpy_to_volatile(volatile uint8_t* destination, uint8_t* source, uint32_t count);
 void memcpy_from_volatile_to_volatile(volatile uint8_t* destination, volatile uint8_t* source, uint32_t count);
 void memset_volatile(volatile uint8_t* destination, uint8_t value, uint32_t count);
-void custom_assert(uint32_t counter, char* file,uint32_t line);
+void custom_assert(uint32_t counter, const char* file,uint32_t line);
 void reset_device(void);
 
 #define MY_COUNTER __COUNTER__
@@ -95,24 +95,24 @@ void reset_device(void);
         custom_assert(MY_COUNTER,__FILE__,__LINE__); \
     } while(0)
 
-//#define CUSTOM_MACRO() \
-//    do{ \
-//        enum { CURRENT_COUNTER = __COUNTER__ }; \
-//        _Pragma message "Captured __COUNTER__ = " STR(CURRENT_COUNTER) \
-//} while(0)
+/*
+#define CUSTOM_MACRO() \
+    do{ \
+        enum { CURRENT_COUNTER = __COUNTER__ }; \
+        _Pragma message "Captured __COUNTER__ = " STR(CURRENT_COUNTER) \
+} while(0)
 
-//#define TRACE_COUNTER() \
-//    enum { TRACE_COUNTER_VALUE = __COUNTER__ }; \
-//    _Pragma(STR(message("TRACE_COUNTER = " STR(TRACE_COUNTER_VALUE))))
+#define TRACE_COUNTER() \
+    enum { TRACE_COUNTER_VALUE = __COUNTER__ }; \
+    _Pragma(STR(message("TRACE_COUNTER = " STR(TRACE_COUNTER_VALUE))))
 
-  //custom_assert(INCREMENT,__FILE__,__LINE__);       \
-  ////#pragma message("Compiling this file...")         \
-  //)
+  custom_assert(INCREMENT,__FILE__,__LINE__);       \
+  #pragma message("Compiling this file...")         \
+  )
 
-
-
-  //#define FORCE_ASSERT_EXPAND (custom_assert(__FILE__,__LINE__))
-  //#define CUSTOM_ASSERT (custom_assert(INCREMENT)
+  #define FORCE_ASSERT_EXPAND (custom_assert(__FILE__,__LINE__))
+  #define CUSTOM_ASSERT (custom_assert(INCREMENT)
+*/
 
 
 #endif /* GENERIC_H_ */

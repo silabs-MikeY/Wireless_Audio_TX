@@ -1,8 +1,10 @@
+#ifndef AUDIO_BUFFERS_H_
+#define AUDIO_BUFFERS_H_
+
 #include "hardware_config.h"
-#include "stddef.h"
-#include "scheduler.h"
-#include "radio_transmit.h"
-#include "scheduler.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 
 #define NUMBER_OF_AUDIO_BUFFERS 20
 
@@ -16,4 +18,6 @@ void audio_buffers__add_new_data_to_left_buffer(uint8_t *data_pointer);
 void audio_buffers__add_new_data_to_right_buffer(uint8_t *data_pointer);
 void audio_buffers__init(void);
 bool audio_buffers__run_process(void);
+bool is_stereo_mode(void);
 
+#endif

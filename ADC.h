@@ -2,22 +2,15 @@
 #define ADC_H_
 
 #include "hardware_config.h"
-#include "em_usart.h"
-#include "em_ldma.h"
-#include "em_gpio.h"
-#include "em_cmu.h"
-#include "stddef.h"
-#include "dmadrv.h"
-#include "VDAC.h"
-#include <stdio.h>
-#include <stdarg.h>
-#include <assert.h>
-#include "debug.h"
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
 // #include "radio.h"
 
 
 bool adc__get_new_data_ready_flag(uint32_t** new_data_pointer_return);
 void adc__init(void);
+void adc__deinit(void);
 bool adc__get_audio_stereo_flag(void);
 bool adc__get_new_packet_ready_for_processing(uint8_t** data_pointer);
 

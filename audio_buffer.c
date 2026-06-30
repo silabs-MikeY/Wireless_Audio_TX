@@ -1,5 +1,11 @@
 #include "audio_buffers.h"
 
+#include "counters.h"
+#include "scheduler.h"
+#include "radio_transmit.h"
+
+#include <string.h>
+
 // TODO
 // Really the perfect use case for C++...
 // Should get rid of duplication
@@ -15,6 +21,11 @@ bool left_data_waiting = false;
 bool right_data_waiting = false;
 
 bool stereo_mode = false;
+
+bool is_stereo_mode(void)
+{
+    return stereo_mode;
+}
 
 static void radio_buffers__advance_left_audio_buffer_head(void)
 {
@@ -42,7 +53,7 @@ static void radio_buffers__advance_right_audio_buffer_head(void)
     if (audio_buffers_right[audio_buffer_head_right].used == true)
     {
         // Overflow
-        printf("OVERFLOW RIGHT\n");
+        debug__printf_to_buf_append_time(0,"OVERFLOW RIGHT\n");
         //debug__increment_packet_buffer_overflows();
     }
 }
@@ -77,7 +88,7 @@ void audio_buffers__add_new_data_to_left_buffer(uint8_t *data_pointer)
     audio_buffers_left[audio_buffer_head_left].used = true;
     audio_buffers_left[audio_buffer_head_left].micros_timestamp = scheduler__get_microsecond_ticks();
     radio_buffers__advance_left_audio_buffer_head();
-    debug__increment_counter(left_buffers_written);
+    counters__increment_counter(left_buffers_written);
 }
 
 /**
@@ -95,9 +106,9 @@ void audio_buffers__add_new_data_to_right_buffer(uint8_t *data_pointer)
     audio_buffers_right[audio_buffer_head_right].used = true;
     audio_buffers_right[audio_buffer_head_right].micros_timestamp = scheduler__get_microsecond_ticks();
     radio_buffers__advance_right_audio_buffer_head();
-    debug__increment_counter(right_buffers_written);
-    // debug__add_to_counter(samples_received_right, RADIO_PACKET_DATA_SIZE_PER_CHANNEL >> 1);
-    //printf("wrote the right buffer: %u\n", (unsigned int)audio_buffer_head_right);
+    counters__increment_counter(right_buffers_written);
+    // counters__add_to_counter(samples_received_right, RADIO_PACKET_DATA_SIZE_PER_CHANNEL >> 1);
+    //printf_to_buf_append_time(0,"wrote the right buffer: %u\n", (unsigned int)audio_buffer_head_right);
 }
 
 static bool audio_buffers__check_if_any_left_audio_data_ready(void)
@@ -189,7 +200,7 @@ static void audio_buffers__right_clear_buffer(uint32_t index)
 {
     if (index < NUMBER_OF_AUDIO_BUFFERS)
     {
-        memset(audio_buffers_right[index].audio_buffer, 0, sizeof(audio_buffer_t));
+        memset(&audio_buffers_right[index], 0, sizeof(audio_buffer_t));
     }
     // memset(audio_buffers_right[index], 0, sizeof(audio_buffer_t));
     // for (uint8_t i = 0; i < NUMBER_OF_AUDIO_BUFFERS; i++)
@@ -212,10 +223,10 @@ bool audio_buffers__run_process(void)
 {
     if (stereo_mode)
     {
-        if (audio_buffers__is_right_audio_data_ready() && audio_buffers__is_right_audio_data_ready())
+        if (audio_buffers__is_left_audio_data_ready() && audio_buffers__is_right_audio_data_ready())
         {
-            debug__increment_counter(left_buffers_consumed);
-            debug__increment_counter(right_buffers_consumed);
+            counters__increment_counter(left_buffers_consumed);
+            counters__increment_counter(right_buffers_consumed);
         }
     }
     else
@@ -229,15 +240,15 @@ bool audio_buffers__run_process(void)
             if (!((first_buffer_to_send_index < NUMBER_OF_AUDIO_BUFFERS) && (second_buffer_to_send_index < NUMBER_OF_AUDIO_BUFFERS)))
             {
                 // this shouldn't be possible
-                //printf("Error getting mono buffers to send %u %u\n",(unsigned int)first_buffer_to_send_index, (unsigned int)second_buffer_to_send_index);
+                //printf_to_buf_append_time(0,"Error getting mono buffers to send %u %u\n",(unsigned int)first_buffer_to_send_index, (unsigned int)second_buffer_to_send_index);
                 return false;
             }
 
             // add to packet buffer
 
-            debug__add_to_counter(right_buffers_consumed,2);
+            counters__add_to_counter(right_buffers_consumed,2);
 
-            //printf("Sent Buffers: %u , %u\n", (unsigned int)first_buffer_to_send_index, (unsigned int)second_buffer_to_send_index);
+            //printf_to_buf_append_time(0,"Sent Buffers: %u , %u\n", (unsigned int)first_buffer_to_send_index, (unsigned int)second_buffer_to_send_index);
             right_data_waiting = false;
             //debug__log_TX_success(false);
             if (radio_transmit__create_new_packet_buffer(audio_buffers_right[first_buffer_to_send_index].audio_buffer, audio_buffers_right[second_buffer_to_send_index].audio_buffer, false))

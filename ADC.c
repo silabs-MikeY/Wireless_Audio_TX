@@ -1,8 +1,22 @@
+#include <stdio.h>
+#include <assert.h>
+
 #include "ADC.h"
+#include "generic.h"
+#include "audio_buffers.h"
+#include "counters.h"
+#include "print.h"
+
+#include "dmadrv.h"
+#include "em_cmu.h"
+#include "em_gpio.h"
+#include "em_ldma.h"
+#include "em_usart.h"
+#include "sl_hal_ldma.h"
 
 static void adc__init_i2s(void);
-static void adc__ldma_init(void);
 static void adc__ldma_init_2(void);
+static void adc__wait_for_startup_validation(void);
 
 
 
@@ -43,6 +57,9 @@ extern volatile uint32_t debug_signals[10];
 
 static bool stereo_flag = false;
 
+static volatile bool startup_left_buffer_ready = false;
+static volatile bool startup_right_buffer_ready = false;
+
 bool new_packet_ready_left_flag = false;
 bool new_packet_ready_right_flag = false;
 
@@ -72,17 +89,6 @@ bool adc__get_new_packet_ready_for_processing(uint8_t **data_pointer)
 }
 
 /**
- * @brief Gets the current ADC reinitialization flag state (placeholder).
- * Currently unimplemented but reserved for detecting ADC reset conditions.
- * 
- * @param None
- * @return ADC reinitialization flag state
- */
-bool get_adc_reinit_flag(void)
-{
-}
-
-/**
  * @brief Gets the audio stereo flag state.
  * Indicates whether the ADC is configured for stereo (true) or mono (false) mode.
  * 
@@ -106,8 +112,12 @@ bool adc__get_audio_stereo_flag(void)
 void adc__init(void)
 {
   stereo_flag = false;
+  startup_left_buffer_ready = false;
+  startup_right_buffer_ready = false;
   adc__ldma_init_2();
   adc__init_i2s();
+  USART_Enable(USART0, usartEnable);
+  adc__wait_for_startup_validation();
 }
 
 /**
@@ -121,22 +131,22 @@ void adc__init(void)
  */
 void adc__deinit(void)
 {
-  printf("DEINITIALIZING ADC\n");
+  debug__printf_to_buf_append_time(0,"DEINITIALIZING ADC\n");
 
   if (CMU->CLKEN0 & CMU_CLKEN0_USART0)
   {
-    printf("RESETTING USART\n");
+    debug__printf_to_buf_append_time(0,"RESETTING USART\n");
     USART_Reset(USART0);
-    printf("RESET USART\n");
+    debug__printf_to_buf_append_time(0,"RESET USART\n");
   }
 
-  // printf("STOPPING LDMA LEFT\n");
+  // printf_to_buf_append_time(0,"STOPPING LDMA LEFT\n");
   // LDMA_StopTransfer(LDMA_CHANNEL_LEFT);
-  // printf("STOPPED LDMA LEFT\n");
+  // printf_to_buf_append_time(0,"STOPPED LDMA LEFT\n");
 
-  // printf("STOPPING LDMA RIGHT\n");
+  // printf_to_buf_append_time(0,"STOPPING LDMA RIGHT\n");
   // LDMA_StopTransfer(LDMA_CHANNEL_RIGHT);
-  // printf("STOPPED LDMA RIGHT\n");
+  // printf_to_buf_append_time(0,"STOPPED LDMA RIGHT\n");
 
   if (!((LDMA_CHANNEL_LEFT == 0) && (LDMA_CHANNEL_RIGHT == 0)))
   {
@@ -146,11 +156,11 @@ void adc__deinit(void)
     DMADRV_return_status = DMADRV_FreeChannel(LDMA_CHANNEL_LEFT);
     if (DMADRV_return_status == ECODE_EMDRV_DMADRV_OK)
     {
-      printf("DEINITIALIZED LEFT DMA CHANNEL: %u\n", (unsigned int)LDMA_CHANNEL_LEFT);
+      debug__printf_to_buf_append_time(0,"DEINITIALIZED LEFT DMA CHANNEL: %u\n", (unsigned int)LDMA_CHANNEL_LEFT);
     }
     else if (DMADRV_return_status == ECODE_EMDRV_DMADRV_ALREADY_FREED)
     {
-      printf("LEFT DMA CHANNEL: %u already freed\n", (unsigned int)LDMA_CHANNEL_LEFT);
+      debug__printf_to_buf_append_time(0,"LEFT DMA CHANNEL: %u already freed\n", (unsigned int)LDMA_CHANNEL_LEFT);
     }
     else if (DMADRV_return_status == ECODE_EMDRV_DMADRV_NOT_INITIALIZED)
     {
@@ -161,11 +171,11 @@ void adc__deinit(void)
     DMADRV_return_status = DMADRV_FreeChannel(LDMA_CHANNEL_RIGHT);
     if (DMADRV_return_status == ECODE_EMDRV_DMADRV_OK)
     {
-      printf("DEINITIALIZED RIGHT DMA CHANNEL: %u\n", (unsigned int)LDMA_CHANNEL_RIGHT);
+      debug__printf_to_buf_append_time(0,"DEINITIALIZED RIGHT DMA CHANNEL: %u\n", (unsigned int)LDMA_CHANNEL_RIGHT);
     }
     else if (DMADRV_return_status == ECODE_EMDRV_DMADRV_ALREADY_FREED)
     {
-      printf("RIGHT DMA CHANNEL: %u ALREADY FREED\n", (unsigned int)LDMA_CHANNEL_RIGHT);
+      debug__printf_to_buf_append_time(0,"RIGHT DMA CHANNEL: %u ALREADY FREED\n", (unsigned int)LDMA_CHANNEL_RIGHT);
     }
     else if (DMADRV_return_status == ECODE_EMDRV_DMADRV_NOT_INITIALIZED)
     {
@@ -176,7 +186,7 @@ void adc__deinit(void)
   // DMADRV_return_status = DMADRV_StopTransfer(LDMA_CHANNEL_LEFT);
   // if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
   // {
-  //   printf("DEINITIALIZED LEFT DMA: %u\n", (unsigned int)DMADRV_return_status);
+  //   printf_to_buf_append_time(0,"DEINITIALIZED LEFT DMA: %u\n", (unsigned int)DMADRV_return_status);
   // }
   // else
   // {
@@ -184,7 +194,7 @@ void adc__deinit(void)
   // DMADRV_return_status = DMADRV_StopTransfer(LDMA_CHANNEL_LEFT);
   // if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
   // {
-  //   printf("DEINITIALIZED RIGHT DMA: %u\n", (unsigned int)DMADRV_return_status);
+  //   printf_to_buf_append_time(0,"DEINITIALIZED RIGHT DMA: %u\n", (unsigned int)DMADRV_return_status);
   // }
   // else
   // {
@@ -193,7 +203,7 @@ void adc__deinit(void)
   // DMADRV_return_status = DMADRV_FreeChannel(LDMA_CHANNEL_LEFT);
   // if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
   // {
-  //   printf("DEINITIALIZED RIGHT DMA: %u\n", (unsigned int)DMADRV_return_status);
+  //   printf_to_buf_append_time(0,"DEINITIALIZED RIGHT DMA: %u\n", (unsigned int)DMADRV_return_status);
   // }
   // else
   // {
@@ -202,7 +212,7 @@ void adc__deinit(void)
   // DMADRV_return_status = DMADRV_FreeChannel(LDMA_CHANNEL_RIGHT);
   // if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
   // {
-  //   printf("DEINITIALIZED RIGHT DMA: %u\n", (unsigned int)DMADRV_return_status);
+  //   printf_to_buf_append_time(0,"DEINITIALIZED RIGHT DMA: %u\n", (unsigned int)DMADRV_return_status);
   // }
   // else
   // {
@@ -211,7 +221,7 @@ void adc__deinit(void)
   //   DMADRV_return_status = DMADRV_AllocateChannel(&LDMA_CHANNEL_LEFT, NULL);
   // if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
   //   {
-  //     printf("Allocate Error: %X\n",(unsigned int)DMADRV_return_status);
+  //     printf_to_buf_append_time(0,"Allocate Error: %X\n",(unsigned int)DMADRV_return_status);
   //     assert(0);
   //   }
 }
@@ -338,6 +348,41 @@ void truncate_data_and_write_to_buffer(uint8_t *input, uint8_t *output, uint32_t
  */
 void process_packet(bool left_or_right)
 {
+  (void)left_or_right;
+}
+
+static void adc__wait_for_startup_validation(void)
+{
+  uint32_t start_cycles = DWT->CYCCNT;
+  uint32_t timeout_cycles = CMU_ClockFreqGet(cmuClock_CORE);
+  bool left_ready_logged = false;
+  bool right_ready_logged = false;
+
+  DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"Waiting for ADC startup buffers\n"));
+
+  while ((startup_left_buffer_ready == false) || (startup_right_buffer_ready == false))
+  {
+    if ((startup_left_buffer_ready == true) && (left_ready_logged == false))
+    {
+      left_ready_logged = true;
+      DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"ADC startup left buffer ready\n"));
+    }
+
+    if ((startup_right_buffer_ready == true) && (right_ready_logged == false))
+    {
+      right_ready_logged = true;
+      DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"ADC startup right buffer ready\n"));
+    }
+
+    if ((uint32_t)(DWT->CYCCNT - start_cycles) > timeout_cycles)
+    {
+      assert(0);
+      // printf("ADC startup buffers validation timeout\n");
+      //custom_assert(0, __FILE__, __LINE__);
+    }
+  }
+
+  DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"ADC startup buffers validated\n"));
 }
 
 /**
@@ -357,7 +402,10 @@ static bool DMA_left_callback(unsigned int channel, unsigned int sequenceNo, voi
   (void)sequenceNo;
   (void)userParam;
 
-  // printf("Left ADC seq: %X\n",(unsigned int)sequenceNo);
+   // printf_to_buf_append_time(0,"Left ADC seq: %X\n",(unsigned int)sequenceNo);
+
+  startup_left_buffer_ready = true;
+  counters__add_to_counter(samples_received_left, RADIO_PACKET_DATA_SIZE_PER_CHANNEL >> 1); // divide by 2
 
   if (stereo_flag == false)
   {
@@ -415,15 +463,15 @@ static bool DMA_right_callback(unsigned int channel, unsigned int sequenceNo, vo
   (void)sequenceNo;
   (void)userParam;
 
-  // printf("Right ADC seq: %X\n",(unsigned int)sequenceNo);
+  //  printf_to_buf_append_time(0,"Right ADC seq: %X\n",(unsigned int)sequenceNo);
 
   if (sequenceNo & 0x1)
   {
-    rightBuffer_to_process = &rightBuffer_1;
+    rightBuffer_to_process = rightBuffer_1;
   }
   else
   {
-    rightBuffer_to_process = &rightBuffer_2;
+    rightBuffer_to_process = rightBuffer_2;
   }
 
 // CORE_DECLARE_IRQ_STATE;
@@ -438,6 +486,8 @@ static bool DMA_right_callback(unsigned int channel, unsigned int sequenceNo, vo
   truncate_data((uint8_t *)rightBuffer_to_process, output_buffer, RADIO_PACKET_DATA_SIZE);
 
   audio_buffers__add_new_data_to_right_buffer((uint8_t *)output_buffer);
+
+  startup_right_buffer_ready = true;
 
 // CORE_EXIT_CRITICAL();
 
@@ -473,7 +523,7 @@ static bool DMA_right_callback(unsigned int channel, unsigned int sequenceNo, vo
   // new_packet_ready_right_flag = true;
   // new_packet_right_pointer = output_buffer;
 
-  debug__add_to_counter(samples_received_right, RADIO_PACKET_DATA_SIZE_PER_CHANNEL >> 1); // divide by 2
+  counters__add_to_counter(samples_received_right, RADIO_PACKET_DATA_SIZE_PER_CHANNEL >> 1); // divide by 2
 
   return true;
 }
@@ -574,41 +624,41 @@ void adc__ldma_init_2(void)
   DMADRV_return_status = DMADRV_Init();
   if ((DMADRV_return_status != ECODE_EMDRV_DMADRV_OK) && (DMADRV_return_status != ECODE_EMDRV_DMADRV_ALREADY_INITIALIZED))
   {
-    printf("DMADRV init failed: %X\n", (unsigned int)DMADRV_return_status);
+    debug__printf_to_buf_append_time(0,"DMADRV init failed: %X\n", (unsigned int)DMADRV_return_status);
     assert(0);
   }
 
   DMADRV_return_status = DMADRV_AllocateChannel(&LDMA_CHANNEL_LEFT, NULL);
   if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
   {
-    printf("Allocate Error: %X\n", (unsigned int)DMADRV_return_status);
+    debug__printf_to_buf_append_time(0,"Allocate Error: %X\n", (unsigned int)DMADRV_return_status);
     assert(0);
   }
-  printf("Got RX Left DMA Channel: %u\n", (unsigned int)LDMA_CHANNEL_LEFT);
+  debug__printf_to_buf_append_time(0,"Got RX Left DMA Channel: %u\n", (unsigned int)LDMA_CHANNEL_LEFT);
 
   DMADRV_return_status = DMADRV_AllocateChannel(&LDMA_CHANNEL_RIGHT, NULL);
   if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
   {
-    printf("Allocate Error: %X\n", (unsigned int)DMADRV_return_status);
+    debug__printf_to_buf_append_time(0,"Allocate Error: %X\n", (unsigned int)DMADRV_return_status);
     assert(0);
   }
-  printf("Got RX Right DMA Channel: %u\n", (unsigned int)LDMA_CHANNEL_RIGHT);
+  debug__printf_to_buf_append_time(0,"Got RX Right DMA Channel: %u\n", (unsigned int)LDMA_CHANNEL_RIGHT);
 
-  DMADRV_return_status = DMADRV_PeripheralMemoryPingPong(LDMA_CHANNEL_LEFT, dmadrvPeripheralSignal_USART0_RXDATAV, (void *)leftBuffer_1, (void *)leftBuffer_2, (void *)&(USART0->RXDATA), true, BUFFER_SIZE, dmadrvDataSize1, DMA_left_callback, NULL);
+  DMADRV_return_status = DMADRV_PeripheralMemoryPingPong(LDMA_CHANNEL_LEFT, dmadrvPeripheralSignal_USART0_RXDATAV, (void *)leftBuffer_1, (void *)leftBuffer_2, (void *)&(USART0->RXDATA), true, BUFFER_SIZE, SL_HAL_LDMA_CTRL_SIZE_BYTE, DMA_left_callback, NULL);
   if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
   {
-    printf("LDMA_CHANNEL_RX_LEFT start Error: %X\n", (unsigned int)DMADRV_return_status);
+    debug__printf_to_buf_append_time(0,"LDMA_CHANNEL_RX_LEFT start Error: %X\n", (unsigned int)DMADRV_return_status);
     assert(0);
   }
-  printf("Started LDMA_CHANNEL_RX_LEFT\n");
+  debug__printf_to_buf_append_time(0,"Started LDMA_CHANNEL_RX_LEFT\n");
 
-  DMADRV_return_status = DMADRV_PeripheralMemoryPingPong(LDMA_CHANNEL_RIGHT, dmadrvPeripheralSignal_USART0_RXDATAVRIGHT, (void *)rightBuffer_1, (void *)rightBuffer_2, (void *)&(USART0->RXDATA), true, BUFFER_SIZE, dmadrvDataSize1, DMA_right_callback, NULL);
+  DMADRV_return_status = DMADRV_PeripheralMemoryPingPong(LDMA_CHANNEL_RIGHT, dmadrvPeripheralSignal_USART0_RXDATAVRIGHT, (void *)rightBuffer_1, (void *)rightBuffer_2, (void *)&(USART0->RXDATA), true, BUFFER_SIZE, SL_HAL_LDMA_CTRL_SIZE_BYTE, DMA_right_callback, NULL);
   if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
   {
-    printf("LDMA_CHANNEL_RX_RIGHT start Error: %X\n", (unsigned int)DMADRV_return_status);
+    debug__printf_to_buf_append_time(0,"LDMA_CHANNEL_RX_RIGHT start Error: %X\n", (unsigned int)DMADRV_return_status);
     assert(0);
   }
-  printf("Started LDMA_CHANNEL_RX_RIGHT\n");
+  debug__printf_to_buf_append_time(0,"Started LDMA_CHANNEL_RX_RIGHT\n");
 }
 
 // void initLDMA(void)

@@ -28,21 +28,13 @@
  *
  ******************************************************************************/
 
-#include "em_core.h"
-#include "em_cmu.h"
-#include "em_gpio.h"
-#include "em_core.h"
-#include "em_chip.h"
-#include "em_prs.h"
 #include "app_init.h"
 #include "sl_iostream.h"
-#include "ADC.h"
-#include "RGB.h"
-#include "debug.h"
-#include "button.h"
-#include "app_process.h"
-// #include "radio.h"
+#include "sl_iostream_handles.h"
+#include "sl_rail_util_init.h"
+#include "state_machine.h"
 #include "generic.h"
+#include "rail.h"
 
 volatile uint32_t msTicks = 0;
 uint32_t get_msTicks(void)
@@ -53,11 +45,6 @@ volatile uint32_t one_second_tick = 0;
 //extern sl_iostream_t *sl_iostream_vcom_handle;
 extern sl_iostream_t *sl_iostream_inst_handle;
 
-// -----------------------------------------------------------------------------
-//                                   Includes
-// -----------------------------------------------------------------------------
-#include "sl_rail_util_init.h"
-#include  <stdio.h>
 // -----------------------------------------------------------------------------
 //                              Macros and Typedefs
 // -----------------------------------------------------------------------------
@@ -122,6 +109,10 @@ RAIL_Handle_t app_init(void)
 
   sl_iostream_set_default(sl_iostream_get_handle("inst"));
 
+  printf("\n\n\nApplication Start\n\n\n");
+
+  state_machine__run_state_machine();
+
   //  GPIO_PinModeSet(gpioPortA, 7, gpioModePushPull, 1);
   //  GPIO_PinOutSet(gpioPortA, 7);
   //  GPIO_PinModeSet(gpioPortA, 8, gpioModeInput, 0);
@@ -149,19 +140,19 @@ RAIL_Handle_t app_init(void)
 //  GPIO_PinOutClear(gpioPortB, 0);
 //  GPIO_PinOutClear(gpioPortB, 1);
 
-//  printf("\n\n\n\n\n\n\n\n\n\n");
-//  printf("init Main\n");
-//  sl_iostream_printf(sl_iostream_get_default(),"init default IOStream\n");
-//  sl_iostream_printf(sl_iostream_get_handle("inst"),"init Inst\n");
-//  sl_iostream_printf(sl_iostream_inst_handle,"init Inst\n");
-//  sl_iostream_printf(sl_iostream_get_handle("vcom"),"init Vcom\n");
+//  printf_to_buf_append_time(0,"\n\n\n\n\n\n\n\n\n\n");
+//  printf_to_buf_append_time(0,"init Main\n");
+//  sl_iostream_printf_to_buf_append_time(0,sl_iostream_get_default(),"init default IOStream\n");
+//  sl_iostream_printf_to_buf_append_time(0,sl_iostream_get_handle("inst"),"init Inst\n");
+//  sl_iostream_printf_to_buf_append_time(0,sl_iostream_inst_handle,"init Inst\n");
+//  sl_iostream_printf_to_buf_append_time(0,sl_iostream_get_handle("vcom"),"init Vcom\n");
 //  //  sl_iostream_set_default(sl_iostream_vcom_handle);
-//  printf("\n\n\n\n\n\n\n\n\n\n");
-//  printf("init3\n");
-//  sl_iostream_printf(sl_iostream_get_default(),"init4\n");
+//  printf_to_buf_append_time(0,"\n\n\n\n\n\n\n\n\n\n");
+//  printf_to_buf_append_time(0,"init3\n");
+//  sl_iostream_printf_to_buf_append_time(0,sl_iostream_get_default(),"init4\n");
 //  sl_iostream_set_default(sl_iostream_get_handle("inst"));
 
-//  debug__init_counters();
+//  counters__init_counters();
 //  scheduler__init_SysTick();
 
 //  radio__init_packet_buffers();

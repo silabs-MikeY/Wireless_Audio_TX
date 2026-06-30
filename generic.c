@@ -1,8 +1,9 @@
+#include <assert.h>
+
 #include "generic.h"
+#include "print.h"
 
 //MEMCPY not volatile safe
-
-static uint32_t reset_counter = 0;
 
 static BURAM_contents_t BURAM_contents[NUMBER_OF_BURTC_REGISTERS_USED];
 
@@ -109,13 +110,13 @@ void process_device_reset(void)
   //  TRACE_COUNTER();
 
 
-  printf("Reset, Checking Casuse \n");
+  debug__printf_to_buf_append_time(0,"Reset, Checking Casuse \n");
 
   reset_causes_xg24_t reset_cause = get_reset_cause();
 
   CMU_ClockEnable(cmuClock_BURAM, true);
 
-  printf("Reset Cause : %s\n",NUMBER_OF_RMU_CAUSE_TYPES_NAMES[reset_cause]);
+  debug__printf_to_buf_append_time(0,"Reset Cause : %s\n",NUMBER_OF_RMU_CAUSE_TYPES_NAMES[reset_cause]);
 
   if ((reset_cause == POR) ||
       (reset_cause == DVDDBOD) ||
@@ -124,7 +125,7 @@ void process_device_reset(void)
       (reset_cause == AVDDBOD) ||
       (reset_cause == IOVDD0BOD))
     {
-      printf("Initializing BURAM:\n");
+      debug__printf_to_buf_append_time(0,"Initializing BURAM:\n");
       for (uint32_t i=0 ; i<NUMBER_OF_BURTC_REGISTERS_USED ; i++)
         {
           BURAM_contents[i].contents = 0;
@@ -136,7 +137,7 @@ void process_device_reset(void)
     }
   else
     {
-      printf("Fetching BURAM:\n");
+      debug__printf_to_buf_append_time(0,"Fetching BURAM:\n");
       for (uint32_t i=0 ; i<NUMBER_OF_BURTC_REGISTERS_USED ; i++)
         {
           BURAM_contents[i].contents = BURAM->RET[i].REG;
@@ -149,10 +150,10 @@ void process_device_reset(void)
 
   BURAM_contents[reset_cause].contents++;
 
-  printf("Reset Counters:\n");
+  debug__printf_to_buf_append_time(0,"Reset Counters:\n");
   for (uint32_t i=0 ; i<NUMBER_OF_RMU_CAUSE_TYPES ; i++)
     {
-      printf("- %s : %u\n", NUMBER_OF_RMU_CAUSE_TYPES_NAMES[i], (unsigned int)BURAM_contents[i].contents);
+      debug__printf_to_buf_append_time(0,"- %s : %u\n", NUMBER_OF_RMU_CAUSE_TYPES_NAMES[i], (unsigned int)BURAM_contents[i].contents);
     }
 
   switch(reset_cause)
@@ -227,10 +228,10 @@ bool validate_cananries(void)
  */
 void save_BURTC(void)
 {
-  printf("Saving BURAM:\n");
+  debug__printf_to_buf_append_time(0,"Saving BURAM:\n");
   if (validate_cananries() != true)
     {
-      printf("Canaries Invalid\n"); //This is really really bad and means memory corruption
+      debug__printf_to_buf_append_time(0,"Canaries Invalid\n"); //This is really really bad and means memory corruption
       assert(0);
       CORE_ResetSystem();
     }
@@ -336,7 +337,19 @@ void memset_volatile(volatile uint8_t* destination, uint8_t value, uint32_t coun
  * @param line - Line number where assertion occurred
  * @return void
  */
-void custom_assert(uint32_t counter, char* file,uint32_t line)
+void custom_assert(uint32_t counter, const char* file,uint32_t line)
 {
-  fprintf(stderr, "Assertion failed: (%s), file %s, line %d\n", "x > 0", file, (unsigned int)line);
+  (void)counter;
+  (void)file;
+  (void)line;
+  //printf("Assertion failed: counter %u, file %s, line %u\n", (unsigned int)counter, file, (unsigned int)line);
+  //fflush(stdout);
+  //debug_print_all_buffers();
+
+  //__disable_irq();
+
+  assert(0);
+  while (1)
+  {
+  }
 }

@@ -1,4 +1,15 @@
+#include <stdio.h>
+#include <assert.h>
+
 #include "VDAC.h"
+#include "ADC.h"
+#include "print.h"
+
+#include "em_cmu.h"
+#include "em_gpio.h"
+#include "em_vdac.h"
+#include "sl_gpio.h"
+#include "sl_status.h"
 
 uint32_t start = false;
 
@@ -97,10 +108,10 @@ void init_vdac_interrupt(void)
   sl_status_t return_status = sl_gpio_configure_external_interrupt(&pin, &int_no, SL_GPIO_INTERRUPT_RISING_EDGE, LRCLK_callback, NULL);
   if (return_status != SL_STATUS_OK)
     {
-      printf("GPIO Configure Error: %X\n",(unsigned int)return_status);
+      debug__printf_to_buf_append_time(0,"GPIO Configure Error: %X\n",(unsigned int)return_status);
       assert(0);
     }
-  printf("Enabled GPIO \n");
+  debug__printf_to_buf_append_time(0,"Enabled GPIO \n");
 }
 
 void init_vdac_output(void)

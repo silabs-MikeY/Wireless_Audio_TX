@@ -3,24 +3,9 @@
 
 //#include "em_cmu.h"
 //#include "em_gpio.h"
-#include "em_core.h"
-#include "em_chip.h"
-#include "hardware_config.h"
-#include "RGB.h"
-#include "debug.h"
-#include "sl_rail_util_init.h"
-#include "app_process.h"
-#include "vdac.h"
-#include "button.h"
 //#include "radio.h"
-#include "vdac.h"
-#include "scheduler.h"
-#include "ADC.h"
-#include "button.h"
-#include "wdog.h"
-#include "microseconds.h"
-#include "radio_base.h"
 
+#include <stdbool.h>
 typedef enum
 {
   NONE,

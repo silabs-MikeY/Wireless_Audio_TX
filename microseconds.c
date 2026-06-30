@@ -21,10 +21,12 @@ uint32_t microseconds__get_micros_count(void)
             assert(0);
         // }
     }
-    else
-    {
-        assert(0);
-    }
+    return 0;
+
+    // else
+    // {
+    //     assert(0);
+    // }
 }
 
 /**
@@ -41,7 +43,7 @@ void microseconds__reset_micros_count(void)
     {
         // if (MICROS_COUNT_TIMER->STATUS == TIMER_STATUS_RUNNING)
         // {
-            debug__add_to_counter(number_of_micro_ticks,MICROS_COUNT_TIMER->CNT);
+            counters__add_to_counter(number_of_micro_ticks,MICROS_COUNT_TIMER->CNT);
             TIMER_CounterSet(MICROS_COUNT_TIMER, 0);
         // }
     }
@@ -58,15 +60,15 @@ void microseconds__reset_micros_count(void)
  */
 void microseconds__deinit_microsecond(void)
 {
-    DEBUG_PERIPHERALS_LOG(printf("-- Stopping Microsecond Tick Timer\n"));
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"-- Stopping Microsecond Tick Timer\n"));
     if (TIMER_Valid(MICROS_TICK_TIMER) == false)
     {
-        DEBUG_PERIPHERALS_LOG(printf("Bad MICROS_TICK_TIMER choice\n"));
+        DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"Bad MICROS_TICK_TIMER choice\n"));
         assert(0);
     }
     if (TIMER_Valid(MICROS_COUNT_TIMER) == false)
     {
-        DEBUG_PERIPHERALS_LOG(printf("Bad MICROS_COUNT_TIMER choice\n"));
+        DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"Bad MICROS_COUNT_TIMER choice\n"));
         assert(0);
     }
 
@@ -83,7 +85,19 @@ void microseconds__deinit_microsecond(void)
         TIMER_Reset(MICROS_TICK_TIMER);
         timers__deinit_timer_cmu(MICROS_TICK_TIMER);
     }
-    DEBUG_PERIPHERALS_LOG(printf("-- Finished Stopping Microsecond Tick Timer\n"));
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"-- Finished Stopping Microsecond Tick Timer\n"));
+}
+
+static void microseconds__validate_microsecond_count_timer(void)
+{
+    uint32_t start_count = MICROS_COUNT_TIMER->CNT;
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(DWT->CYCCNT,"Testing Microsecond Timer with 50uS Wait : Current %u\n", (unsigned int)start_count));
+
+    while ((uint32_t)(MICROS_COUNT_TIMER->CNT - start_count) < 50u)
+    {
+    }
+
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(DWT->CYCCNT,"Microsecond Timer Finished Testing\n"));
 }
 
 /**
@@ -96,20 +110,20 @@ void microseconds__deinit_microsecond(void)
  */
 void microseconds__init_microsecond(void)
 {
-    DEBUG_PERIPHERALS_LOG(printf("-- Starting Microsecond Tick Timer\n"));
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"-- Starting Microsecond Tick Timer\n"));
     if (TIMER_Valid(MICROS_TICK_TIMER) == false)
     {
-        DEBUG_PERIPHERALS_LOG(printf("Bad MICROS_TIMER choice\n"));
+        DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"Bad MICROS_TIMER choice\n"));
         assert(0);
     }
 
     // CMU_ClockEnable(cmuClock_PRS, true);
 
     // uint32_t core_speed = CMU_ClockFreqGet(cmuClock_CORE);
-    // printf("Core Speed : %u\n",(unsigned int)core_speed);
+    // printf_to_buf_append_time(0,"Core Speed : %u\n",(unsigned int)core_speed);
     // if (SysTick_Config(core_speed/1000) != 0)
     //   {
-    //     printf("Microcecond Tick Failed to start\n");
+    //     printf_to_buf_append_time(0,"Microcecond Tick Failed to start\n");
     //     assert(0);
     //   }
 
@@ -167,19 +181,19 @@ void microseconds__init_microsecond(void)
     //   {
     //     //BAD RGB1_TIMER value
     //     //TODO Handle Error
-    //     printf("Bad MICROS_TIMER choice\n");
+    //     printf_to_buf_append_time(0,"Bad MICROS_TIMER choice\n");
     //     assert(0);
     //   }
 
     // CMU_ClockEnable(clock_to_enable, true);
 
     uint32_t timer_speed = CMU_ClockFreqGet(timers__get_cmu_type(MICROS_TICK_TIMER));
-    DEBUG_PERIPHERALS_LOG(printf("Micros timer base peripheral speed: %u\n", (unsigned int)timer_speed));
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"Micros timer base peripheral speed: %u\n", (unsigned int)timer_speed));
 
     if (timer_speed < 1000000)
     {
         // Under 1MHZ Too Low
-        DEBUG_PERIPHERALS_LOG(printf("Micros timer base peripheral speed too Low\n"));
+        DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"Micros timer base peripheral speed too Low\n"));
         assert(0);
     }
 
@@ -189,7 +203,7 @@ void microseconds__init_microsecond(void)
         // Shouldn't be possible AFAIK but still something that could be possible
         // Don't have a solution for this yet
         // TODO find a solution
-        DEBUG_PERIPHERALS_LOG(printf("Micros timer base peripheral speed is not multiple of 1MHz\n"));
+        DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"Micros timer base peripheral speed is not multiple of 1MHz\n"));
         assert(0);
     }
 
@@ -229,8 +243,8 @@ void microseconds__init_microsecond(void)
         prescaled_speed = timer_speed / 2;
     }
 
-    DEBUG_PERIPHERALS_LOG(printf("Prescaler Chosen: %u\n", (unsigned int)(maximum_prescale_possible+1)));
-    DEBUG_PERIPHERALS_LOG(printf("New Prescaled Speed: %u\n", (unsigned int)prescaled_speed));
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"Prescaler Chosen: %u\n", (unsigned int)(maximum_prescale_possible+1)));
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"New Prescaled Speed: %u\n", (unsigned int)prescaled_speed));
 
     TIMER_Init_TypeDef timerInit = TIMER_INIT_DEFAULT;
     TIMER_InitCC_TypeDef timerCCInit = TIMER_INITCC_DEFAULT;
@@ -248,13 +262,13 @@ void microseconds__init_microsecond(void)
     TIMER_InitCC(MICROS_TICK_TIMER, 0, &timerCCInit);
 
     uint32_t TIMER_TOP = prescaled_speed / 1000000 - 1; // 1MHz Top Value
-    DEBUG_PERIPHERALS_LOG(printf("Top Value: %u\n", (unsigned int)TIMER_TOP));
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"Top Value: %u\n", (unsigned int)TIMER_TOP));
     TIMER_TopSet(MICROS_TICK_TIMER, TIMER_TOP);
 
     uint32_t dutyCount = (TIMER_TOP >> 1); // half duty cycle
     TIMER_CompareSet(MICROS_TICK_TIMER, 0, dutyCount);
 
-    DEBUG_PERIPHERALS_LOG(printf("Set 50per duty cycle value: %u\n", (unsigned int)dutyCount));
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"Set 50per duty cycle value: %u\n", (unsigned int)dutyCount));
 
     // GPIO_PinModeSet(RGB1_BLUE_PORT, RGB1_BLUE_PIN, gpioModePushPull, 0);
 
@@ -271,13 +285,14 @@ void microseconds__init_microsecond(void)
     // RGB1_BLUE_PORT,
     // RGB1_BLUE_PIN);
 
-    //   printf("Set PRS output\n");
+    //   printf_to_buf_append_time(0,"Set PRS output\n");
 
     TIMER_Enable(MICROS_TICK_TIMER, true);
 
-    DEBUG_PERIPHERALS_LOG(printf("-- Started Microsecond Tick Timer\n"));
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"-- Started Microsecond Tick Timer\n"));
 
     microseconds__init_microsecond_count();
+    microseconds__validate_microsecond_count_timer();
 }
 
 /**
@@ -291,27 +306,27 @@ void microseconds__init_microsecond(void)
 void microseconds__init_microsecond_count(void)
 {
     // TODO CHECK FOR ALREADY INIT
-    DEBUG_PERIPHERALS_LOG(printf("-- Starting Microsecond Count Timer\n"));
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"-- Starting Microsecond Count Timer\n"));
 
     if (TIMER_Valid(MICROS_COUNT_TIMER) == false)
     {
-        DEBUG_PERIPHERALS_LOG(printf("Bad MICROS_COUNT_TIMER choice\n"));
+        DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"Bad MICROS_COUNT_TIMER choice\n"));
         assert(0);
     }
 
     // if (((uint8_t*)MICROS_COUNT_TIMER) - (sizeof(TIMER_TypeDef)) != MICROS_TICK_TIMER)
     // {
-    //     printf("MICROS_COUNT_TIMER is not sequential counter after MICROS_TICK_TIMER\n");
-    //     printf("MICROS_COUNT_TIMER address: %u\n", MICROS_COUNT_TIMER);
-    //     printf("MICROS_TICK_TIMER address: %u\n", MICROS_TICK_TIMER);
-    //     printf("Calculated MICROS_TICK_TIMER address: %u\n", ((uint8_t*)MICROS_COUNT_TIMER) - (sizeof(TIMER_TypeDef)));
-    //     printf("Calculated TIMER_TypeDef size: %u\n", sizeof(TIMER_TypeDef));
-    //     printf("MICROS_COUNT_TIMER - MICROS_TICK_TIMER: %u\n", ((uint8_t*)MICROS_COUNT_TIMER) - ((uint8_t*)MICROS_TICK_TIMER) );
-    //     printf("TIMER0 address: %u\n", TIMER0);
-    //     printf("TIMER1 address: %u\n", TIMER1);
-    //     printf("TIMER2 address: %u\n", TIMER2);
-    //     printf("TIMER3 address: %u\n", TIMER3);
-    //     printf("TIMER4 address: %u\n", TIMER4);
+    //     printf_to_buf_append_time(0,"MICROS_COUNT_TIMER is not sequential counter after MICROS_TICK_TIMER\n");
+    //     printf_to_buf_append_time(0,"MICROS_COUNT_TIMER address: %u\n", MICROS_COUNT_TIMER);
+    //     printf_to_buf_append_time(0,"MICROS_TICK_TIMER address: %u\n", MICROS_TICK_TIMER);
+    //     printf_to_buf_append_time(0,"Calculated MICROS_TICK_TIMER address: %u\n", ((uint8_t*)MICROS_COUNT_TIMER) - (sizeof(TIMER_TypeDef)));
+    //     printf_to_buf_append_time(0,"Calculated TIMER_TypeDef size: %u\n", sizeof(TIMER_TypeDef));
+    //     printf_to_buf_append_time(0,"MICROS_COUNT_TIMER - MICROS_TICK_TIMER: %u\n", ((uint8_t*)MICROS_COUNT_TIMER) - ((uint8_t*)MICROS_TICK_TIMER) );
+    //     printf_to_buf_append_time(0,"TIMER0 address: %u\n", TIMER0);
+    //     printf_to_buf_append_time(0,"TIMER1 address: %u\n", TIMER1);
+    //     printf_to_buf_append_time(0,"TIMER2 address: %u\n", TIMER2);
+    //     printf_to_buf_append_time(0,"TIMER3 address: %u\n", TIMER3);
+    //     printf_to_buf_append_time(0,"TIMER4 address: %u\n", TIMER4);
     //     assert(0);
     // }
 
@@ -352,7 +367,7 @@ void microseconds__init_microsecond_count(void)
     //   {
     //     //BAD RGB1_TIMER value
     //     //TODO Handle Error
-    //     printf("Bad MICROS_TIMER choice\n");
+    //     printf_to_buf_append_time(0,"Bad MICROS_TIMER choice\n");
     //     assert(0);
     //   }
 
@@ -368,21 +383,13 @@ void microseconds__init_microsecond_count(void)
     TIMER_Init(MICROS_COUNT_TIMER, &timerInit);
     TIMER_InitCC(MICROS_COUNT_TIMER, 0, &timerCCInit);
 
-    uint32_t TIMER_TOP = 0xFFFF;
-    DEBUG_PERIPHERALS_LOG(printf("Top Value: %u\n", (unsigned int)TIMER_TOP));
+    uint32_t TIMER_TOP = 0xFFFFFFFF;
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"Top Value: %u\n", (unsigned int)TIMER_TOP));
     TIMER_TopSet(MICROS_COUNT_TIMER, TIMER_TOP);
 
     TIMER_Enable(MICROS_COUNT_TIMER, true);
 
-    uint32_t microseconds = MICROS_COUNT_TIMER->CNT;
-    DEBUG_PERIPHERALS_LOG(printf("Testing Microsecond Timer with 50uS Wait : Current %u\n", (unsigned int)microseconds));
-    while(MICROS_COUNT_TIMER->CNT < (microseconds + 500))
-    {
-        DEBUG_PERIPHERALS_LOG(printf("Waiting for Microsecond Timer Testing to Finish : %u\n", (unsigned int)(MICROS_COUNT_TIMER->CNT)));
-    }
-    DEBUG_PERIPHERALS_LOG(printf("Microsecond Timer Finished Testing\n"));
-
-    DEBUG_PERIPHERALS_LOG(printf("-- Started Microsecond Count Timer\n"));
+    DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"-- Started Microsecond Count Timer\n"));
 }
 
 /**

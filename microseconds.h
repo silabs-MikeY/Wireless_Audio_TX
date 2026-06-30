@@ -8,7 +8,8 @@
 #include "stddef.h"
 #include "stdbool.h"
 #include "assert.h"
-#include "debug.h"
+#include "print.h"
+#include "counters.h"
 
 uint32_t microseconds__get_micros_count(void);
 void microseconds__deinit_microsecond(void);

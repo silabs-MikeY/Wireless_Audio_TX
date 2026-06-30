@@ -1,4 +1,14 @@
 #include "RGB.h"
+#include "app_process.h"
+#include "em_gpio.h"
+#include "em_timer.h"
+#include "print.h"
+#include "scheduler.h"
+#include "state_machine.h"
+#include "app_init.h"
+#include "timer_helper.h"
+
+
 
 //#define BIT_DEPTH 24
 //#define VOLTAGE_RANGE_mV 30000 //3V p-p
@@ -38,6 +48,8 @@
 volatile uint32_t current_threshold_reached = 0;
 volatile uint32_t new_threshold_reached = 0;
 volatile uint32_t current_threshold_reached_timestamp = 0;
+static uint32_t latest_audio_level_min_mv = 0;
+static uint32_t latest_audio_level_max_mv = 0;
 
 #define OUT_FREQ 0x0FFF
 
@@ -152,6 +164,19 @@ void rgb__run_radio_status_blink(uint32_t current_tick)
 
 }
 
+void rgb__get_audio_level_stats(uint32_t *min_level_mv, uint32_t *max_level_mv)
+{
+  if (min_level_mv != NULL)
+  {
+    *min_level_mv = latest_audio_level_min_mv;
+  }
+
+  if (max_level_mv != NULL)
+  {
+    *max_level_mv = latest_audio_level_max_mv;
+  }
+}
+
 void rgb__radio_blink_turn_on(void)
 {
   if (state_machine__get_state() == RUNNING)
@@ -170,18 +195,18 @@ void rgb__timer_init(void)
   if (RGB1_TIMER == RGB2_TIMER)
   {
     // TODO Handle Error
-    printf("Can't use the same timer for RGB1 and RGB2\n");
+    debug__printf_to_buf_append_time(0,"Can't use the same timer for RGB1 and RGB2\n");
     assert(0);
   }
 
   if (timers__init_timer_cmu(RGB1_TIMER) == false)
   {
-    printf("Bad RGB1_TIMER choice\n");
+    debug__printf_to_buf_append_time(0,"Bad RGB1_TIMER choice\n");
     assert(0);
   }
   if (timers__init_timer_cmu(RGB2_TIMER) == false)
   {
-    printf("Bad RGB2_TIMER choice\n");
+    debug__printf_to_buf_append_time(0,"Bad RGB2_TIMER choice\n");
     assert(0);
   }
 
@@ -190,7 +215,7 @@ void rgb__timer_init(void)
   if (RGB1_timer_index == 0xFFFFFFFF)
   {
     // BAD RGB1_TIMER value
-    printf("Invalid RGB1 index\n");
+    debug__printf_to_buf_append_time(0,"Invalid RGB1 index\n");
     assert(0);
   }
 
@@ -199,7 +224,7 @@ void rgb__timer_init(void)
   if (RGB2_timer_index == 0xFFFFFFFF)
   {
     // BAD RGB2_TIMER value
-    printf("Invalid RGB2 index\n");
+    debug__printf_to_buf_append_time(0,"Invalid RGB2 index\n");
     assert(0);
   }
 
@@ -349,7 +374,7 @@ void rgb__check_level(uint8_t* new_data_pointer)
 {
   if (new_data_pointer == 0)
     {
-      printf("NULL POINTER \n");
+      debug__printf_to_buf_append_time(0,"NULL POINTER \n");
       assert(0);
     }
   uint16_t* two_byte_pointer = (uint16_t*)new_data_pointer;
@@ -360,20 +385,20 @@ void rgb__check_level(uint8_t* new_data_pointer)
   for (uint32_t i=0 ; i< 127; i++)
     {
       uint16_t* two_byte_pointer_temp = (two_byte_pointer + i);
-      if (*two_byte_pointer & 0x8000)
+      if (*two_byte_pointer_temp & 0x8000)
         {
           // sample is negative
-          if (*two_byte_pointer < lowest_signal_level)
+          if (*two_byte_pointer_temp < lowest_signal_level)
             {
-              lowest_signal_level = *two_byte_pointer;
+              lowest_signal_level = *two_byte_pointer_temp;
             }
         }
       else
         {
           // sample is positive
-          if (*two_byte_pointer > highest_signal_level)
+          if (*two_byte_pointer_temp > highest_signal_level)
             {
-              highest_signal_level = *two_byte_pointer;
+              highest_signal_level = *two_byte_pointer_temp;
             }
         }
 
@@ -423,8 +448,11 @@ void rgb__check_level(uint8_t* new_data_pointer)
   uint32_t threshold_mid = (MEDIUM_LEVEL_THRESHOLD_UPPER_8BIT);
   uint32_t threshold_high = (HIGH_LEVEL_THRESHOLD_UPPER_8BIT);
 
-//  printf("Max: %umv - ",(highest_signal_level)*3000/0xFFFF);
-//  printf("Min: -%umv\n",(0xFFFF - lowest_signal_level)*3000/0xFFFF);
+  latest_audio_level_max_mv = (highest_signal_level * VOLTAGE_RANGE_mV) / 0xFFFFUL;
+  latest_audio_level_min_mv = (lowest_signal_level_abs * VOLTAGE_RANGE_mV) / 0xFFFFUL;
+
+//  printf_to_buf_append_time(0,"Max: %umv - ",(highest_signal_level)*3000/0xFFFF);
+//  printf_to_buf_append_time(0,"Min: -%umv\n",(0xFFFF - lowest_signal_level)*3000/0xFFFF);
 
   uint32_t threshold_reached = 0;
 
@@ -523,6 +551,7 @@ void rgb__check_level(uint8_t* new_data_pointer)
 
 void rgb__set_rgb_out(uint8_t RGB_number, color_t color, bool clear_other_colors, uint8_t intensity)
 {
+  (void)clear_other_colors;
   // if ((TIMER_peripheral != TIMER0) && (TIMER_peripheral != TIMER1))
   // {
   //   //TODO NOTE ERROR
@@ -543,7 +572,7 @@ void rgb__set_rgb_out(uint8_t RGB_number, color_t color, bool clear_other_colors
       return;
     }
 
-    if ((TIMER_peripheral->STATUS && TIMER_STATUS_RUNNING) == false)
+    if ((TIMER_peripheral->STATUS & TIMER_STATUS_RUNNING) == 0)
     {
 //TODO NOTE ERROR
       return;

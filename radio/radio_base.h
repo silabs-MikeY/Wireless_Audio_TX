@@ -5,15 +5,18 @@
 #include "em_core.h"
 #include "em_prs.h"
 #include "em_gpio.h"
+#include "generic.h"
 #include "stddef.h"
 #include "hardware_config.h"
 #include "rail_types.h"
 #include "sl_rail_util_init.h"
 #include "radio_transmit.h"
+#include "radio_statistics.h"
+#include "radio_receive.h"
+#include "radio_transmit.h"
 
 
-uint8_t* radio__get_next_buffer(bool left_or_right_data);
-void radio__process_event(RAIL_Handle_t rail_handle, RAIL_Events_t events);
+#define ENABLE_PRS 0
 
 #define NUMBER_OF_PACKET_BUFFERS 20
 
@@ -26,11 +29,13 @@ void radio__process_event(RAIL_Handle_t rail_handle, RAIL_Events_t events);
 #define CONTROL_BITS__BIT6_UNUSED BIT(6)
 #define CONTROL_BITS__BIT7_UNUSED BIT(7)
 
+uint8_t* radio__get_next_buffer(bool left_or_right_data);
+void radio__process_event(RAIL_Handle_t rail_handle, RAIL_Events_t events);
 void radio__init(void);
 void radio__deinit(void);
 uint32_t radio__get_sequence_number(void);
 void radio__increment_sequence_number(void);
-void radio__increment_channel(void);
+void radio__request_increment_channel(void);
 uint32_t radio__get_channel(void);
 bool radio__get_channel_changed_flag(void);
 void radio__reset_channel_chanegd_flag(void);

@@ -1,8 +1,12 @@
 #include "radio_retry.h"
 
+#include "radio_base.h"
+#include "scheduler.h"
+
+#include <string.h>
+
 static void radio_retry__clean_missing_packet_list(void);
 static uint32_t radio_retry__check_if_theres_a_missing_packet_to_send(void);
-static bool radio_retry__try_to_send_packet(void);
 
 typedef struct missing_packet_list_entry_s
 {
@@ -73,11 +77,11 @@ static void radio_retry__clean_missing_packet_list(void)
     {
         if (missing_packet_list[i].used == true)
         {
-            if (((missing_packet_list[i].timestamp_of_entry + TIMEOUT_MICROSECONDS) < microseconds) ||
-                (missing_packet_list[i].send_attempts > 5) ||
+            if (((microseconds - missing_packet_list[i].timestamp_of_entry) >= TIMEOUT_MICROSECONDS) ||
+                (missing_packet_list[i].send_attempts >= 5) ||
                 (missing_packet_list[i].marked_for_delete == true))
             {
-                // printf("Erasing List Entry %u\n", (unsigned int)i);
+                // printf_to_buf_append_time(0,"Erasing List Entry %u\n", (unsigned int)i);
                 memset(&(missing_packet_list[i]), 0, sizeof(missing_packet_list_entry_t));
                 continue;
             }
@@ -114,17 +118,6 @@ static uint32_t radio_retry__check_if_theres_a_missing_packet_to_send(void)
 }
 
 /**
- * @brief Attempts to send a retry packet (placeholder implementation).
- * Currently not fully implemented but intended to transmit missing packets.
- * 
- * @param None
- * @return true on success, false on failure
- */
-static bool radio_retry__try_to_send_packet(void)
-{
-}
-
-/**
  * @brief Main retry process loop called from scheduler.
  * Cleans expired entries, finds oldest missing packet, and attempts transmission.
  * Increments send attempt counter and returns true if packet was sent.
@@ -142,7 +135,7 @@ bool radio_retry__run_process(void)
 
         if (packet_to_send != 0xFFFFFFFF)
         {
-            // printf("Resending Packet : %u, Index : %u,Attempts : %u\n", (unsigned int)missing_packet_list[packet_to_send].sequence_number, (unsigned int)packet_to_send, (unsigned int)missing_packet_list[packet_to_send].send_attempts);
+            // printf_to_buf_append_time(0,"Resending Packet : %u, Index : %u,Attempts : %u\n", (unsigned int)missing_packet_list[packet_to_send].sequence_number, (unsigned int)packet_to_send, (unsigned int)missing_packet_list[packet_to_send].send_attempts);
             missing_packet_list[packet_to_send].send_attempts++;
 
             if (radio__send_packet_by_sequence_number(missing_packet_list[packet_to_send].sequence_number, true))
@@ -168,7 +161,7 @@ void radio_retry__note_retry_packet_successfully_sent(uint16_t sequence_number)
     {
         if (missing_packet_list[i].sequence_number == sequence_number)
         {
-            // printf("Marking Packet %u for Deletion from Retry List\n", (unsigned int)sequence_number);
+            // printf_to_buf_append_time(0,"Marking Packet %u for Deletion from Retry List\n", (unsigned int)sequence_number);
             missing_packet_list[i].marked_for_delete = true;
             return;
         }

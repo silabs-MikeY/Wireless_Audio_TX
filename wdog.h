@@ -8,6 +8,7 @@
 #include "generic.h"
 #include "em_cmu.h"
 #include "em_rmu.h"
+#include "print.h"
 
 void wdog__init(void);
 

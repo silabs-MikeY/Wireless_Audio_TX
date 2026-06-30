@@ -50,6 +50,7 @@
 uint32_t radio__get_channel(void);
 void set_channel(uint32_t new_channel);
 void set_reset_loop_flag(void);
+void reset_app_process_action_run_delta_micros(void);
 
 /**************************************************************************//**
  * The function is used for Application logic.

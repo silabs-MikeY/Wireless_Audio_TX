@@ -190,7 +190,19 @@ target_compile_options(slc PUBLIC
     "$<$<COMPILE_LANGUAGE:ASM>:SHELL:-x assembler-with-cpp>"
 )
 
-set(post_build_command )
+set(COMMANDER_DEVICE "EFR32MG24B220F1536IM48")
+set(COMMANDER_SERIALNO "440305682")
+
+set(post_build_command
+    "${POST_BUILD_EXE}"
+    "flash"
+    "$<TARGET_FILE_DIR:TX_Board>/TX_Board.hex"
+    "--device"
+    "${COMMANDER_DEVICE}"
+    "--serialno"
+    "${COMMANDER_SERIALNO}"
+    "--halt"
+)
 set_property(TARGET slc PROPERTY C_STANDARD 17)
 set_property(TARGET slc PROPERTY CXX_STANDARD 17)
 set_property(TARGET slc PROPERTY CXX_EXTENSIONS OFF)

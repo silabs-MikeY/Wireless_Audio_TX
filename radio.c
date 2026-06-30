@@ -270,10 +270,10 @@
 //   }
 //   printf("Current Sequence %u\n", (unsigned int)next_sequence_number);
 //   printf("\nCounters \n");
-//   debug__one_second_print();
+//   counters__one_second_print();
 //   for (uint32_t i = 0; i < 100; i++)
 //   {
-//     debug__run_debug_print_state_machine();
+//     counters__run_debug_print_state_machine();
 //   }
 // }
 

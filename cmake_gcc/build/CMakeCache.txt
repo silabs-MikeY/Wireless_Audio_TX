@@ -267,6 +267,9 @@ CMAKE_TOOLCHAIN_FILE:FILEPATH=/Users/miyablon/SimplicityStudio/v6_workspace/TX_B
 // Studio IDE projects all commands are done without /nologo.
 CMAKE_VERBOSE_MAKEFILE:BOOL=FALSE
 
+//Flash TX_Board automatically after build
+TX_BOARD_FLASH_AFTER_BUILD:BOOL=OFF
+
 //Value Computed by CMake
 TX_Board_BINARY_DIR:STATIC=/Users/miyablon/SimplicityStudio/v6_workspace/TX_Board/cmake_gcc/build
 

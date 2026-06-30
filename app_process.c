@@ -32,22 +32,21 @@
 // -----------------------------------------------------------------------------
 //                                   Includes
 // -----------------------------------------------------------------------------
-#include "sl_component_catalog.h"
-#include "rail.h"
+#include "RGB.h"
 #include "events_prints.h"
+#include "print.h"
+#include "radio_base.h"
 #include "rail_types.h"
-#include "app_init.h"
 #include "sl_rail_util_init.h"
-#include "dmadrv.h"
 #include "ADC.h"
 #include "scheduler.h"
-#include <stdio.h>
 #include "sl_iostream.h"
 #include "app_process.h"
 #include "hardware_config.h"
 // #include "radio.h"
 #include "state_machine.h"
 #include "generic.h"
+#include "counters.h"
 
 #if defined(SL_CATALOG_KERNEL_PRESENT)
 #include "app_task_init.h"
@@ -85,6 +84,8 @@ uint8_t TEST_BUFFER[RADIO_PACKET_DATA_SIZE];
 uint32_t sequence_number = 0;
 
 const RAIL_CsmaConfig_t CSMA_config = RAIL_CSMA_CONFIG_802_15_4_2003_2p4_GHz_OQPSK_CSMA;
+
+uint32_t app_process_action_run_delta_micros = 0;
 
 // -----------------------------------------------------------------------------
 //                          Static Function Declarations
@@ -149,7 +150,7 @@ uint16_t sequenceNumber;
 //       uint32_t return_count = RAIL_WriteTxFifo(temp, (uint8_t*)(&header_temp), RADIO_PACKET_HEADER_SIZE, true);
 //       if (return_count != RADIO_PACKET_HEADER_SIZE)
 //         {
-//           printf("Write Header To TX FIFO Failed: 0x%u:\n",(unsigned int)return_count);
+//           printf_to_buf_append_time(0,"Write Header To TX FIFO Failed: 0x%u:\n",(unsigned int)return_count);
 //           while(1);
 //         }
 
@@ -160,7 +161,7 @@ uint16_t sequenceNumber;
 
 //       if (return_count != RADIO_PACKET_DATA_SIZE)
 //         {
-//           printf("Write Data To TX FIFO Failed: 0x%u:\n",(unsigned int)return_count);
+//           printf_to_buf_append_time(0,"Write Data To TX FIFO Failed: 0x%u:\n",(unsigned int)return_count);
 //           while(1);
 //         }
 
@@ -178,6 +179,11 @@ uint16_t sequenceNumber;
 //     }
 // }
 
+void reset_app_process_action_run_delta_micros(void)
+{
+  app_process_action_run_delta_micros = 0;
+}
+
 void print_events(void)
 {
   CORE_DECLARE_IRQ_STATE;
@@ -193,15 +199,15 @@ void print_events(void)
 
   if (logged_events_count_non_volatile > 0)
     {
-      printf("New events:\n");
+      debug__printf_to_buf_append_time(0,"New events:\n");
 
       for (uint8_t i=0 ; i<logged_events_count_non_volatile ; i++)
         {
-          printf("Event : %u\n", (unsigned int)i);
+          debug__printf_to_buf_append_time(0,"Event : %u\n", (unsigned int)i);
           for (long long unsigned int j=0 ; j<64 ; j++)
             {
-              printf("0x%X : ", (unsigned int)(logged_events_non_volatile[i] & (0x1ULL << j)));
-              printf("%s\n", getString((long long unsigned int)(logged_events_non_volatile[i] & (0x1ULL << j))));
+              debug__printf_to_buf_append_time(0,"0x%X : ", (unsigned int)(logged_events_non_volatile[i] & (0x1ULL << j)));
+              debug__printf_to_buf_append_time(0,"%s\n", getString((long long unsigned int)(logged_events_non_volatile[i] & (0x1ULL << j))));
             }
         }
     }
@@ -214,8 +220,8 @@ void print_events(void)
   //
   //      if ((temp_events >> i) & 0x01)
   //        {
-  //          printf("0x%X : ",temp_events & (0x1ULL << i));
-  //          printf("%s\n", getString((long long unsigned int)(temp_events & (0x1ULL << i))));
+  //          printf_to_buf_append_time(0,"0x%X : ",temp_events & (0x1ULL << i));
+  //          printf_to_buf_append_time(0,"%s\n", getString((long long unsigned int)(temp_events & (0x1ULL << i))));
   //        }
   //    }
 }
@@ -246,13 +252,23 @@ void app_process_action(RAIL_Handle_t rail_handle)
   // Do not call blocking functions from here!                             //
   ///////////////////////////////////////////////////////////////////////////
 
+  scheduler__update_millis();
+
+  counters__increment_counter(app_process_action_runs);
+
+  // static uint32_t timestamp_last_run = 0;
+  // uint32_t timestamp_now = microseconds__get_micros_count();
+  // uint32_t delta = timestamp_now - timestamp_last_run;
+  // if (delta > app_process_action_run_delta_micros)
+  // {
+  //   counters__set_counter(app_process_action_runs_max_time_between_runs, delta);
+  //   app_process_action_run_delta_micros = delta;
+  // }
+  // timestamp_last_run = timestamp_now;
+
+  //RESET_LOOP_IF_NECESSARY()
+
   state_machine__run_state_machine();
-  RESET_LOOP_IF_NECESSARY()
-
-  debug__increment_counter(app_process_action_runs);
-  RESET_LOOP_IF_NECESSARY()
-
-  radio__run_process();
   RESET_LOOP_IF_NECESSARY()
 
   scheduler__run_scheduler();
@@ -261,7 +277,11 @@ void app_process_action(RAIL_Handle_t rail_handle)
   audio_buffers__run_process();
   RESET_LOOP_IF_NECESSARY()
 
-  debug__run_debug_print_state_machine();
+  radio__run_process();
+  RESET_LOOP_IF_NECESSARY()
+
+  counters__run_debug_print_state_machine();
+  debug__check_print_buffers_and_print();
   RESET_LOOP_IF_NECESSARY()
 
   uint8_t* new_data_pointer = 0;
@@ -277,9 +297,9 @@ void app_process_action(RAIL_Handle_t rail_handle)
   return;
 
 
-  //printf("mp\n");
+  //printf_to_buf_append_time(0,"mp\n");
 
-  //  sl_iostream_printf(sl_iostream_inst_handle,"init Inst\n");
+  //  sl_iostream_printf_to_buf_append_time(0,sl_iostream_inst_handle,"init Inst\n");
   //
   //  static char buffer[10] = {'T','E','S','T'};
   //  sl_iostream_write(sl_iostream_inst_handle,buffer,4);
@@ -292,7 +312,7 @@ void app_process_action(RAIL_Handle_t rail_handle)
   //  if (channel_changed_flag == true)
   //    {
   //      channel_changed_flag = false;
-  //      printf("Channel Changed, New Channel: %u\n",channel);
+  //      printf_to_buf_append_time(0,"Channel Changed, New Channel: %u\n",channel);
   //      start_radio_status_blink(get_millisecond_ticks());
   //    }
 
@@ -330,8 +350,8 @@ void app_process_action(RAIL_Handle_t rail_handle)
   //          uint64_t get_event_bit = events_saved & (0x1ULL << j);
   //          if (get_event_bit)
   //            {
-  //              printf("0x%X : ",events_saved & (0x1ULL << j));
-  //              printf("%s\n", getString((long long unsigned int)(events_saved & (0x1ULL << j))));
+  //              printf_to_buf_append_time(0,"0x%X : ",events_saved & (0x1ULL << j));
+  //              printf_to_buf_append_time(0,"%s\n", getString((long long unsigned int)(events_saved & (0x1ULL << j))));
   //            }
   //        }
   //      events_saved = 0;
@@ -342,25 +362,25 @@ void app_process_action(RAIL_Handle_t rail_handle)
   //    {
   // if (debug_signals[1] != 0)
   //   {
-  //     printf("Debug Signal Set - %i : %X\n",(unsigned int)1,(unsigned int)debug_signals[1]);
-  //     printf("VDAC Status - %X\n",VDAC0->STATUS);
-  //     printf("VDAC Config - %X\n",VDAC0->CFG);
-  //     printf("VDAC Outctrl : %X\n",VDAC0->OUTCTRL);
-  //     printf("VDAC IF : %X\n",VDAC0->IF);
+  //     printf_to_buf_append_time(0,"Debug Signal Set - %i : %X\n",(unsigned int)1,(unsigned int)debug_signals[1]);
+  //     printf_to_buf_append_time(0,"VDAC Status - %X\n",VDAC0->STATUS);
+  //     printf_to_buf_append_time(0,"VDAC Config - %X\n",VDAC0->CFG);
+  //     printf_to_buf_append_time(0,"VDAC Outctrl : %X\n",VDAC0->OUTCTRL);
+  //     printf_to_buf_append_time(0,"VDAC IF : %X\n",VDAC0->IF);
 
-  //     printf("\n");
+  //     printf_to_buf_append_time(0,"\n");
   //     debug_signals[1] = 0;
   //   }
 
   // if (debug_signals[0] != 0)
   //   {
-  //     printf("Debug Signal Set - %i : %X\n",0,debug_signals[0]);
-  //     printf("UART Status - %X\n",USART0->STATUS);
-  //     printf("UART I2S CTRL - %X\n",USART0->I2SCTRL);
-  //     printf("DMA Status : %X\n",LDMA->STATUS);
-  //     printf("DMA Channel Status : %X\n",LDMA->CHSTATUS);
-  //     printf("DMA Channel Enable : %X\n",LDMA->CHEN);
-  //     printf("DMA Channel Busy : %X\n",LDMA->CHBUSY);
+  //     printf_to_buf_append_time(0,"Debug Signal Set - %i : %X\n",0,debug_signals[0]);
+  //     printf_to_buf_append_time(0,"UART Status - %X\n",USART0->STATUS);
+  //     printf_to_buf_append_time(0,"UART I2S CTRL - %X\n",USART0->I2SCTRL);
+  //     printf_to_buf_append_time(0,"DMA Status : %X\n",LDMA->STATUS);
+  //     printf_to_buf_append_time(0,"DMA Channel Status : %X\n",LDMA->CHSTATUS);
+  //     printf_to_buf_append_time(0,"DMA Channel Enable : %X\n",LDMA->CHEN);
+  //     printf_to_buf_append_time(0,"DMA Channel Busy : %X\n",LDMA->CHBUSY);
 
   //     Ecode_t DMADRV_return_status;
   //     bool active = 0;
@@ -370,38 +390,38 @@ void app_process_action(RAIL_Handle_t rail_handle)
   //     DMADRV_return_status = DMADRV_TransferActive(LDMA_CHANNEL_LEFT,&active);
   //     if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
   //       {
-  //         printf("Check Active Left Error: %X\n",DMADRV_return_status);
+  //         printf_to_buf_append_time(0,"Check Active Left Error: %X\n",DMADRV_return_status);
   //         while(1);
   //       }
-  //     printf("DMA Left Active : %b\n", active);
+  //     printf_to_buf_append_time(0,"DMA Left Active : %b\n", active);
 
   //     DMADRV_return_status = DMADRV_TransferActive(LDMA_CHANNEL_RIGHT,&active);
   //     if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
   //       {
-  //         printf("Check Active Right Error: %X\n",DMADRV_return_status);
+  //         printf_to_buf_append_time(0,"Check Active Right Error: %X\n",DMADRV_return_status);
   //         while(1);
   //       }
-  //     printf("DMA Right Active : %b\n", active);
+  //     printf_to_buf_append_time(0,"DMA Right Active : %b\n", active);
 
 
 
   //     DMADRV_return_status = DMADRV_TransferDone(LDMA_CHANNEL_LEFT,&active);
   //     if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
   //       {
-  //         printf("Check Complete Left Error: %X\n",DMADRV_return_status);
+  //         printf_to_buf_append_time(0,"Check Complete Left Error: %X\n",DMADRV_return_status);
   //         while(1);
   //       }
-  //     printf("DMA Left Complete : %b\n", active);
+  //     printf_to_buf_append_time(0,"DMA Left Complete : %b\n", active);
 
   //     DMADRV_return_status = DMADRV_TransferDone(LDMA_CHANNEL_RIGHT,&active);
   //     if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
   //       {
-  //         printf("Check Complete Right Error: %X\n",DMADRV_return_status);
+  //         printf_to_buf_append_time(0,"Check Complete Right Error: %X\n",DMADRV_return_status);
   //         while(1);
   //       }
-  //     printf("DMA Right Complete : %b\n", active);
+  //     printf_to_buf_append_time(0,"DMA Right Complete : %b\n", active);
 
-  //     printf("\n");
+  //     printf_to_buf_append_time(0,"\n");
   //     debug_signals[0] = 0;
   //   }
   //    }
@@ -414,7 +434,7 @@ void app_process_action(RAIL_Handle_t rail_handle)
 
   //  if (newEventFlag == true)
   //    {
-  //      printf("  new events:\n");
+  //      printf_to_buf_append_time(0,"  new events:\n");
   //      newEventFlag = false;
   //      long long unsigned int temp_events = events_saved;
   //
@@ -424,8 +444,8 @@ void app_process_action(RAIL_Handle_t rail_handle)
   //
   //          if ((temp_events >> i) & 0x01)
   //            {
-  //              printf("0x%X : ",temp_events & (0x1ULL << i));
-  //              printf("%s\n", getString((long long unsigned int)(temp_events & (0x1ULL << i))));
+  //              printf_to_buf_append_time(0,"0x%X : ",temp_events & (0x1ULL << i));
+  //              printf_to_buf_append_time(0,"%s\n", getString((long long unsigned int)(temp_events & (0x1ULL << i))));
   //            }
   //        }
   //    }
@@ -433,14 +453,14 @@ void app_process_action(RAIL_Handle_t rail_handle)
   //    {
   //      static uint32_t tick_cnt = 0;
   //      one_second_tick = false;
-  //      printf("Tick: %i\n", tick_cnt++);
+  //      printf_to_buf_append_time(0,"Tick: %i\n", tick_cnt++);
   //
-  //      //      printf("Debug Signals:");
+  //      //      printf_to_buf_append_time(0,"Debug Signals:");
   //      //      for (uint8_t i = 0 ; i < 10 ; i++)
   //      //        {
-  //      //          printf("%i : %i\n",i,debug_signals[i]);
+  //      //          printf_to_buf_append_time(0,"%i : %i\n",i,debug_signals[i]);
   //      //        }
-  //      //      printf("\n\n\n");
+  //      //      printf_to_buf_append_time(0,"\n\n\n");
   //    }
 }
 /******************************************************************************

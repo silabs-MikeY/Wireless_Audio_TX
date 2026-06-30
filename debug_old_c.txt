@@ -1,7 +1,8 @@
-#include "debug.h"
+#include "debug_old.h"
 
 static void save_and_reset_counters(void);
 static void debug__debug_print_state_machine_printouts(printing_counters_index);
+static void debug_fill_missing_counters(void);
 
 bool printing_counters_flag = false;
 uint32_t printing_counters_index = 0;
@@ -112,11 +113,20 @@ void debug__set_counter(uint32_t counter_index_to_increment, uint32_t value_to_s
 // #endif
 // }
 
+static void debug_fill_missing_counters(void)
+{
+  radio_statistics__get_min_and_max_transmit_deltas(&debug_counters[TX_micros_delta_min], &debug_counters[TX_micros_delta_max]);
+  radio_statistics__get_number_of_transmits_processed(&debug_counters[number_of_TX_packets_processed_after_sending]);
+  debug_counters[sequence_number_at_end] = radio__get_sequence_number();
+  debug_counters[number_of_micro_ticks] = microseconds__get_micros_count();
+}
+
 static void save_and_reset_counters(void)
 {
 #if (DEBUG_ENABLE == 1)
   CORE_DECLARE_IRQ_STATE;
   CORE_ENTER_CRITICAL();
+  debug_fill_missing_counters();
   memcpy_from_volatile(&debug_counters_saved, &debug_counters, sizeof(debug_counters));
   memset_volatile((volatile uint8_t *)&debug_counters, 0, sizeof(debug_counters));
   debug_counters[timestamp_of_last_counter_save] = scheduler__get_millisecond_ticks();
@@ -390,6 +400,12 @@ void debug__init_counters(void)
 // #endif
 // }
 
+void debug__reset_external_counters(void)
+{
+  radio_statistics__reset_radio_statistics_for_new_measurement();
+  reset_app_process_action_run_delta_micros();
+}
+
 void debug__one_second_print(void)
 {
 #if (DEBUG_ENABLE == 1)
@@ -399,6 +415,7 @@ void debug__one_second_print(void)
   printf("Print Counters - Timestamp : %u\n", (unsigned int)time);
   printing_counters_flag = true;
   printing_counters_index = 0;
+  debug__reset_external_counters();
 #endif
 }
 

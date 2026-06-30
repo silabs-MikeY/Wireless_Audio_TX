@@ -1,0 +1,13 @@
+{
+    "folders": [
+        {
+            "path": "."
+        }
+    ],
+    "settings": {
+        "files.exclude": {
+            "**/build": true,
+            "**/cmake_gcc/build": true
+        }
+    }
+}

@@ -1,0 +1,6 @@
+CompileFlags:
+  Add:
+    - --sysroot=/Users/miyablon/.silabs/slt/installs/conan/p/gcc-af360b79bab9e3/p
+    - -isystem/Users/miyablon/.silabs/slt/installs/conan/p/gcc-af360b79bab9e3/p/arm-none-eabi/include
+    - -isystem/Users/miyablon/.silabs/slt/installs/conan/p/gcc-af360b79bab9e3/p/lib/gcc/arm-none-eabi/12.2.1/include
+    - -isystem/Users/miyablon/.silabs/slt/installs/conan/p/gcc-af360b79bab9e3/p/lib/gcc/arm-none-eabi/12.2.1/include-fixed

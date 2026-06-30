@@ -11,6 +11,9 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include "generic.h"
+#include "radio_transmit.h"
+#include "app_process.h"
+
 // #include "radio.h"
 
 #define DEBUG_ENABLE 1
@@ -73,6 +76,7 @@ typedef enum
   timestamp_of_last_counter_save,
   timestamp_of_this_counter_save,
   app_process_action_runs,
+  app_process_action_runs_max_time_between_runs,
   number_of_TX_attempts,
   number_of_TX_attempt_success,
   number_of_TX_attempt_failed,
@@ -93,6 +97,9 @@ typedef enum
   number_of_TX_retry_fail_underflow,
   number_of_TX_retry_fail_busy,
   number_of_TX_retry_fail_missed,
+  number_of_TX_packets_processed_after_sending,
+  TX_micros_delta_min,
+  TX_micros_delta_max,
   number_of_micro_ticks,
   samples_received_left,
   samples_received_right,
@@ -113,6 +120,7 @@ static const char *DEBUG_COUNTERS_STRINGS[] __attribute__ ((used)) = {
   "timestamp_of_last_counter_save",
   "timestamp_of_this_counter_save",
   "app_process_action_runs",
+  "app_process_action_runs_max_time_between_runs",
   "number_of_TX_attempts",
   "number_of_TX_attempt_success",
   "number_of_TX_attempt_failed",
@@ -133,6 +141,9 @@ static const char *DEBUG_COUNTERS_STRINGS[] __attribute__ ((used)) = {
   "number_of_TX_retry_fail_underflow",
   "number_of_TX_retry_fail_busy",
   "number_of_TX_retry_fail_missed",
+  "number_of_TX_packets_processed_after_sending",
+  "TX_micros_delta_min",
+  "TX_micros_delta_max",
   "number_of_micro_ticks",
   "samples_received_left",
   "samples_received_right",
@@ -146,10 +157,10 @@ static const char *DEBUG_COUNTERS_STRINGS[] __attribute__ ((used)) = {
 };
 #endif
 
-void debug__init_counters(void);
-void debug__increment_counter(uint32_t counter_index_to_increment);
-void debug__add_to_counter(uint32_t counter_index_to_increment, uint32_t quantity_to_add);
-void debug__set_counter(uint32_t counter_index_to_increment, uint32_t value_to_set_to);
+void counters__init_counters(void);
+void counters__increment_counter(uint32_t counter_index_to_increment);
+void counters__add_to_counter(uint32_t counter_index_to_increment, uint32_t quantity_to_add);
+void counters__set_counter(uint32_t counter_index_to_increment, uint32_t value_to_set_to);
 
 // void debug__increment_number_of_TX_attempts(bool retry);
 // void debug__increment_number_of_TX_failed(bool retry);
@@ -169,9 +180,9 @@ void debug__set_counter(uint32_t counter_index_to_increment, uint32_t value_to_s
 // void debug__log_TX_retry_busy(void);
 // void debug__log_TX_retry_missed(void);
 
-void debug__one_second_print(void);
+void counters__one_second_print(void);
 // void debug__increment_app_process_action_runs(void);
-void debug__run_debug_print_state_machine(void);
+void counters__run_debug_print_state_machine(void);
 // void debug__increment_packet_buffer_overflows(void);
 // void debug__set_start_sequence_number(uint16_t sequence_number);
 // void debug__set_end_sequence_number(uint16_t sequence_number);

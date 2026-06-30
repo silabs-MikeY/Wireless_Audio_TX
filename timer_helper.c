@@ -1,5 +1,7 @@
 #include "timer_helper.h"
 
+#include "print.h"
+
 /**
  * @brief Checks if a clock is enabled by querying its frequency.
  * Returns true if clock frequency is non-zero (enabled).
@@ -102,13 +104,13 @@ uint32_t timers__get_timer_index(TIMER_TypeDef *timer)
  */
 CMU_Clock_TypeDef timers__get_cmu_type(TIMER_TypeDef *timer)
 {
-    if(TIMER_Valid(timer) == false)
-    {
-        printf("Bad timer choice\n");
-        assert(0);
-    }
+  if(TIMER_Valid(timer) == false)
+  {
+    debug__printf_to_buf_append_time(0,"Bad timer choice\n");
+    assert(0);
+  }
 
-    if (timer == TIMER0)
+  if (timer == TIMER0)
   {
     return cmuClock_TIMER0;
   }
@@ -147,7 +149,7 @@ bool timers__deinit_timer_cmu(TIMER_TypeDef *timer)
 {
     if(TIMER_Valid(timer) == false)
     {
-        printf("Bad timer choice\n");
+        debug__printf_to_buf_append_time(0,"Bad timer choice\n");
         assert(0);
     }
 
@@ -196,7 +198,7 @@ bool timers__init_timer_cmu(TIMER_TypeDef *timer)
 {
     if(TIMER_Valid(timer) == false)
     {
-        printf("Bad timer choice\n");
+        debug__printf_to_buf_append_time(0,"Bad timer choice\n");
         assert(0);
     }
 
