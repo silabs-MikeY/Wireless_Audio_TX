@@ -1,6 +1,7 @@
 #ifndef RADIO_CONFIG_H_
 #define RADIO_CONFIG_H_
 
+#include <stdbool.h>
 #include "em_cmu.h"
 #include "em_core.h"
 #include "em_prs.h"
@@ -41,5 +42,6 @@ bool radio__get_channel_changed_flag(void);
 void radio__reset_channel_chanegd_flag(void);
 void radio__run_process(void);
 bool radio__is_radio_busy(void);
+void radio__printf(bool add_timestamp, const char *format, ...);
 
 #endif

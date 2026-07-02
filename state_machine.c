@@ -4,7 +4,6 @@
 #include "microseconds.h"
 #include "scheduler.h"
 #include "app_process.h"
-#include "counters.h"
 #include "audio_buffers.h"
 #include "RGB.h"
 #include "em_usart.h"
@@ -12,6 +11,9 @@
 #include "radio_base.h"
 #include "RGB.h"
 #include "button.h"
+#include <stdbool.h>
+#include "counters_new.h"
+#include "counter_interface.h"
 
 static volatile states_t state = INIT;
 static volatile states_t last_state = NONE;
@@ -85,14 +87,8 @@ bool state_machine__init_peripherals(void)
 
   DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"micros : %u\n", (unsigned int)microseconds__get_micros_count()));
   DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"\n- Start Counters Init\n"));
-  counters__init_counters();
-  DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"- End Counters Init\n"));
-  DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"micros : %u\n", (unsigned int)microseconds__get_micros_count()));
-
-  DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"micros : %u\n", (unsigned int)microseconds__get_micros_count()));
-
   DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"\n- Start Audio Buffers Init\n"));
-  audio_buffers__init();
+  audio_buffers__init(false);
   DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"- End Audio Buffers Init\n"));
 
   DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"\n- Start Radio Init\n"));
@@ -106,6 +102,11 @@ bool state_machine__init_peripherals(void)
   rgb__init();
   DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"- End RGB Init\n"));
   DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"micros : %u\n", (unsigned int)microseconds__get_micros_count()));
+
+  DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"Start New Counters Init\n"));
+  counters_new__init();
+  counter_interface__init();
+  DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"- End New Counters Init\n"));
 
   //  DEBUG_PERIPHERALS_LOG(printf_to_buf_append_time(0,"Start I2C Init - "));
   //  i2c__init();
@@ -125,7 +126,7 @@ bool state_machine__init_peripherals(void)
 
   DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"micros : %u\n", (unsigned int)microseconds__get_micros_count()));
   DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"\n- Start ADC Init - \n"));
-  adc__init();
+  adc__init(false);
   DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"- End ADC Init\n"));
   DEBUG_PERIPHERALS_LOG(debug__printf_to_buf_append_time(0,"micros : %u\n", (unsigned int)microseconds__get_micros_count()));
 

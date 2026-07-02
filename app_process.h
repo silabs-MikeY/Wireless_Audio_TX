@@ -52,6 +52,11 @@ void set_channel(uint32_t new_channel);
 void set_reset_loop_flag(void);
 void reset_app_process_action_run_delta_micros(void);
 
+uint32_t app_process__get_number_of_counters(void);
+const char *app_process__get_counter_name(uint32_t counter_index);
+volatile uint32_t *app_process__get_counter_address(uint32_t counter_index);
+void app_process__reset_counters(void);
+
 /**************************************************************************//**
  * The function is used for Application logic.
  *

@@ -26,15 +26,15 @@ void radio_receive__init(void)
     RAIL_Status_t RAIL_SetRxFifo_return = RAIL_SetRxFifo(rail_handle, (uint8_t *)radio_rx_fifo, &radio_rx_fifo_size);
     if (RAIL_SetRxFifo_return != RAIL_STATUS_NO_ERROR)
     {
-        debug__printf_to_buf_append_time(0,"RAIL_SetRxFifo failed, Status Code: %X\n", (unsigned int)RAIL_SetRxFifo_return);
+        radio__printf(true, "RAIL_SetRxFifo failed, Status Code: %X\n", (unsigned int)RAIL_SetRxFifo_return);
         assert(0);
     }
     if (radio_rx_fifo_size != RADIO_FIFO_SIZE)
     {
-        debug__printf_to_buf_append_time(0,"RAIL_SetRxFifo Failed. Requested : %u Bytes, Got %u Bytes \n", (unsigned int)RADIO_FIFO_SIZE, (unsigned int)radio_rx_fifo_size);
+        radio__printf(true, "RAIL_SetRxFifo Failed. Requested : %u Bytes, Got %u Bytes \n", (unsigned int)RADIO_FIFO_SIZE, (unsigned int)radio_rx_fifo_size);
         assert(0);
     }
-    debug__printf_to_buf_append_time(0,"RAIL_SetRxFifo Success, %u Bytes\n", (unsigned int)radio_rx_fifo_size);
+    radio__printf(true, "RAIL_SetRxFifo Success, %u Bytes\n", (unsigned int)radio_rx_fifo_size);
 }
 
 /**
@@ -116,7 +116,7 @@ void radio__process_receiver_packet(RAIL_Handle_t rail_handle, RAIL_Events_t eve
 
     if (temp.header.size > RADIO_PACKET_DATA_SIZE_PER_CHANNEL)
     {
-        debug__printf_to_buf_append_time(0,"RX request size too large: %u\n", (unsigned int)temp.header.size);
+        radio__printf(true, "RX request size too large: %u\n", (unsigned int)temp.header.size);
         (void) RAIL_ReleaseRxPacket(rail_handle, rx_packet_handle);
         return;
     }
@@ -133,7 +133,7 @@ void radio__process_receiver_packet(RAIL_Handle_t rail_handle, RAIL_Events_t eve
     {
         uint16_t missing_sequence_number = (temp.data_left[(i * 2)] << 8) | (temp.data_left[(i * 2) + 1]);
         radio_retry__add_missing_packet_entry(missing_sequence_number);
-        DEBUG_RETRY_LOG(debug__printf_to_buf_append_time(0,"%u - Got Request For Sequence Number : %u\n", i, missing_sequence_number));
+        radio__printf(true, "%u - Got Request For Sequence Number : %u\n", i, missing_sequence_number);
     }
 
     (void) RAIL_ReleaseRxPacket(rail_handle, rx_packet_handle);

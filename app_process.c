@@ -33,12 +33,14 @@
 //                                   Includes
 // -----------------------------------------------------------------------------
 #include "RGB.h"
+#include "button.h"
 #include "events_prints.h"
 #include "print.h"
 #include "radio_base.h"
 #include "rail_types.h"
 #include "sl_rail_util_init.h"
 #include "ADC.h"
+#include "microseconds.h"
 #include "scheduler.h"
 #include "sl_iostream.h"
 #include "app_process.h"
@@ -46,7 +48,7 @@
 // #include "radio.h"
 #include "state_machine.h"
 #include "generic.h"
-#include "counters.h"
+#include "counters_new.h"
 
 #if defined(SL_CATALOG_KERNEL_PRESENT)
 #include "app_task_init.h"
@@ -86,6 +88,52 @@ uint32_t sequence_number = 0;
 const RAIL_CsmaConfig_t CSMA_config = RAIL_CSMA_CONFIG_802_15_4_2003_2p4_GHz_OQPSK_CSMA;
 
 uint32_t app_process_action_run_delta_micros = 0;
+
+typedef enum app_process_counter_index_s {
+  APP_PROCESS_ACTION_RUNS = 0,
+  APP_PROCESS_ACTION_RUNS_MAX_MICROS_BETWEEN_RUNS,
+  APP_PROCESS_NUMBER_OF_COUNTERS
+} app_process_counter_index_t;
+
+static volatile uint32_t app_process_counter_values[APP_PROCESS_NUMBER_OF_COUNTERS] = {0};
+static const char *app_process_counter_names[APP_PROCESS_NUMBER_OF_COUNTERS] = {
+  "app_process_action_runs",
+  "app_process_action_runs_max_micros_between_runs",
+};
+
+static uint32_t app_process_action_last_run_micros = 0;
+
+uint32_t app_process__get_number_of_counters(void)
+{
+  return APP_PROCESS_NUMBER_OF_COUNTERS;
+}
+
+const char *app_process__get_counter_name(uint32_t counter_index)
+{
+  if (counter_index >= APP_PROCESS_NUMBER_OF_COUNTERS)
+  {
+    return NULL;
+  }
+
+  return app_process_counter_names[counter_index];
+}
+
+volatile uint32_t *app_process__get_counter_address(uint32_t counter_index)
+{
+  if (counter_index >= APP_PROCESS_NUMBER_OF_COUNTERS)
+  {
+    return NULL;
+  }
+
+  return &app_process_counter_values[counter_index];
+}
+
+void app_process__reset_counters(void)
+{
+  memset((void *)app_process_counter_values, 0, sizeof(app_process_counter_values));
+  app_process_action_run_delta_micros = 0;
+  app_process_action_last_run_micros = microseconds__get_micros_count();
+}
 
 // -----------------------------------------------------------------------------
 //                          Static Function Declarations
@@ -254,17 +302,16 @@ void app_process_action(RAIL_Handle_t rail_handle)
 
   scheduler__update_millis();
 
-  counters__increment_counter(app_process_action_runs);
+  app_process_counter_values[APP_PROCESS_ACTION_RUNS]++;
 
-  // static uint32_t timestamp_last_run = 0;
-  // uint32_t timestamp_now = microseconds__get_micros_count();
-  // uint32_t delta = timestamp_now - timestamp_last_run;
-  // if (delta > app_process_action_run_delta_micros)
-  // {
-  //   counters__set_counter(app_process_action_runs_max_time_between_runs, delta);
-  //   app_process_action_run_delta_micros = delta;
-  // }
-  // timestamp_last_run = timestamp_now;
+  uint32_t timestamp_now = microseconds__get_micros_count();
+  uint32_t delta = timestamp_now - app_process_action_last_run_micros;
+  if (delta > app_process_action_run_delta_micros)
+  {
+    app_process_action_run_delta_micros = delta;
+    app_process_counter_values[APP_PROCESS_ACTION_RUNS_MAX_MICROS_BETWEEN_RUNS] = delta;
+  }
+  app_process_action_last_run_micros = timestamp_now;
 
   //RESET_LOOP_IF_NECESSARY()
 
@@ -280,8 +327,8 @@ void app_process_action(RAIL_Handle_t rail_handle)
   radio__run_process();
   RESET_LOOP_IF_NECESSARY()
 
-  counters__run_debug_print_state_machine();
   debug__check_print_buffers_and_print();
+  counters_new__run_print_state_machine();
   RESET_LOOP_IF_NECESSARY()
 
   uint8_t* new_data_pointer = 0;
@@ -304,7 +351,6 @@ void app_process_action(RAIL_Handle_t rail_handle)
   //  static char buffer[10] = {'T','E','S','T'};
   //  sl_iostream_write(sl_iostream_inst_handle,buffer,4);
 
-  //  for (uint32_t i=0 ; i<RADIO_PACKET_DATA_SIZE ; i++)
   //    {
   //      TEST_BUFFER[i]=i;
   //    }
@@ -328,7 +374,6 @@ void app_process_action(RAIL_Handle_t rail_handle)
   // Check for Level
   //      check_level(non_volatile_new_data_pointer);
   //    }
-
 
 
 

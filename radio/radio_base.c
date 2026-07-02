@@ -8,6 +8,12 @@ bool channel_changed_flag = false;
 bool searching_for_channel_flag = false;
 volatile bool request_channel_increment_flag = false;
 
+__attribute__((weak)) void radio__printf(bool add_timestamp, const char *format, ...)
+{
+  (void)add_timestamp;
+  (void)format;
+}
+
 /**
  * @brief Gets the current TX sequence number.
  * Returns the next sequence number to be assigned to outgoing packets.

@@ -1,5 +1,7 @@
 #include "radio_statistics.h"
+#include "ADC.h"
 #include "print.h"
+#include "scheduler.h"
 #include "state_machine.h"
 
 static bool radio__validate_radio_tx_count(void);
@@ -35,26 +37,26 @@ void radio_statistics__set_stereo_or_mono_config(bool is_stereo)
     {
         stereo_or_mono_config = &mono_config;
         //memcpy(&stereo_or_mono_config, &mono_config, sizeof(mono_stereo_radio_config_values_t));
-        debug__printf_to_buf_append_time(0,"Set Config to Mono\n");
+        radio__printf(true, "Set Config to Mono\n");
     }
     else
     {
         stereo_or_mono_config = &stereo_config;
         //memcpy(&stereo_or_mono_config, &stereo_config, sizeof(mono_stereo_radio_config_values_t));
-        debug__printf_to_buf_append_time(0,"Set Config to Stereo\n");
+        radio__printf(true, "Set Config to Stereo\n");
     }
-    debug__printf_to_buf_append_time(0,"- Expected TX Count Per Second : %u\n", stereo_or_mono_config->number_of_tx_per_second_expected);
-    debug__printf_to_buf_append_time(0,"- Expected TX Delta : %u\n", stereo_or_mono_config->expected_tx_microsecond_delta);
-    debug__printf_to_buf_append_time(0,"- TX Upper Delta Threshold : %u\n", stereo_or_mono_config->acceptable_tx_microsecond_delta_upper);
-    debug__printf_to_buf_append_time(0,"- TX Lower Delta Threshold : %u\n", stereo_or_mono_config->acceptable_tx_microsecond_delta_lower);
+    radio__printf(true, "- Expected TX Count Per Second : %u\n", stereo_or_mono_config->number_of_tx_per_second_expected);
+    radio__printf(true, "- Expected TX Delta : %u\n", stereo_or_mono_config->expected_tx_microsecond_delta);
+    radio__printf(true, "- TX Upper Delta Threshold : %u\n", stereo_or_mono_config->acceptable_tx_microsecond_delta_upper);
+    radio__printf(true, "- TX Lower Delta Threshold : %u\n", stereo_or_mono_config->acceptable_tx_microsecond_delta_lower);
 }
 
 void radio_statistics__init(void)
 {
-    debug__printf_to_buf_append_time(0,"Init Radio Statistics\n");
+    radio__printf(true, "Init Radio Statistics\n");
     memset((void *)&transmit_statistics, 0, sizeof(transmit_statistics_t));
     transmit_statistics.moving_average_tx_delta = stereo_or_mono_config->expected_tx_microsecond_delta;
-    radio_statistics__set_stereo_or_mono_config(false);
+  radio_statistics__set_stereo_or_mono_config(adc__get_audio_stereo_flag());
 }
 
 void radio_statistics__reset_radio_statistics_for_new_measurement(void)
@@ -63,7 +65,7 @@ void radio_statistics__reset_radio_statistics_for_new_measurement(void)
     memset((void *)&transmit_statistics, 0, sizeof(transmit_statistics_t));
     transmit_statistics.moving_average_tx_delta = stereo_or_mono_config->expected_tx_microsecond_delta;
     transmit_statistics.last_tx_timestamp_micros = saved_last_tx_timestamp_micros;
-    debug__printf_to_buf_append_time(0,"Reset Radio Statistics\n");
+    radio__printf(true, "Reset Radio Statistics\n");
 }
 
 static bool radio__validate_radio_tx_count(void)
@@ -110,14 +112,14 @@ void radio_statistics__validate_radio_statistics(void)
     bool good_deltas = radio__validate_radio_tx_timestamp_deltas();
     (void)good_deltas;
 
-    debug__printf_to_buf_append_time(0,"-  Max Delta: %u. , Min Delta : %u\n", (unsigned int)transmit_statistics.max_tx_timestamp_delta, (unsigned int)transmit_statistics.min_tx_timestamp_delta);
-    debug__printf_to_buf_append_time(0,"-  TX Count : %u\n", (unsigned int)transmit_statistics.number_of_TX_packets_sent_this_second);
+    radio__printf(true, "-  Max Delta: %u. , Min Delta : %u\n", (unsigned int)transmit_statistics.max_tx_timestamp_delta, (unsigned int)transmit_statistics.min_tx_timestamp_delta);
+    radio__printf(true, "-  TX Count : %u\n", (unsigned int)transmit_statistics.number_of_TX_packets_sent_this_second);
     if (transmit_statistics.bad_timestamps_count > 0)
     {
-      debug__printf_to_buf_append_time(0,"-  Bad Timestamps : \n");
+      radio__printf(true, "-  Bad Timestamps : \n");
       for (uint32_t i = 0; i < transmit_statistics.bad_timestamps_count; i++)
       {
-        debug__printf_to_buf_append_time(0,"   -- Seq: %u - Delta: %u - Timestamp: %u\n",
+        radio__printf(true, "   -- Seq: %u - Delta: %u - Timestamp: %u\n",
                (unsigned int)transmit_statistics.bad_timestamps[i].sequence_number,
                (unsigned int)transmit_statistics.bad_timestamps[i].timestamp_delta_from_previous,
                (unsigned int)transmit_statistics.bad_timestamps[i].tx_timestamp);
@@ -130,9 +132,9 @@ void radio_statistics__validate_radio_statistics(void)
   }
   else
   {
-    debug__printf_to_buf_append_time(0,"-  Measurement Period Start : %u\n", (unsigned int)last_validation_timestamp_millis);
-    debug__printf_to_buf_append_time(0,"-  Measurement Period End : %u\n", (unsigned int)scheduler__get_millisecond_ticks());
-    debug__printf_to_buf_append_time(0,"-  Measurement Period Time : %u\n", (unsigned int)(scheduler__get_millisecond_ticks() - last_validation_timestamp_millis));
+    radio__printf(true, "-  Measurement Period Start : %u\n", (unsigned int)last_validation_timestamp_millis);
+    radio__printf(true, "-  Measurement Period End : %u\n", (unsigned int)scheduler__get_millisecond_ticks());
+    radio__printf(true, "-  Measurement Period Time : %u\n", (unsigned int)(scheduler__get_millisecond_ticks() - last_validation_timestamp_millis));
     // TODO HANDLE ELSE
   }
 
@@ -147,8 +149,8 @@ bool radio_statistics__note_successful_tx(uint32_t sequence_number, uint32_t tim
         // Rest Deltas
         transmit_statistics.max_tx_timestamp_delta = stereo_or_mono_config->expected_tx_microsecond_delta;
         transmit_statistics.min_tx_timestamp_delta = stereo_or_mono_config->expected_tx_microsecond_delta;
-        debug__printf_to_buf_append_time(0,"-  Reset Max Delta to: %u\n", (unsigned int)transmit_statistics.max_tx_timestamp_delta);
-        debug__printf_to_buf_append_time(0,"-  Reset Min Delta to: %u\n", (unsigned int)transmit_statistics.min_tx_timestamp_delta);
+        radio__printf(true, "-  Reset Max Delta to: %u\n", (unsigned int)transmit_statistics.max_tx_timestamp_delta);
+        radio__printf(true, "-  Reset Min Delta to: %u\n", (unsigned int)transmit_statistics.min_tx_timestamp_delta);
 
         //printf_to_buf_append_time(0,"-  New Max Delta: %u. , New Min Delta : %u\n", (unsigned int)transmit_statistics.max_tx_timestamp_delta, (unsigned int)transmit_statistics.min_tx_timestamp_delta);
 
@@ -173,7 +175,7 @@ bool radio_statistics__note_successful_tx(uint32_t sequence_number, uint32_t tim
         transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count].timestamp_delta_from_previous = tx_delta;
         transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count].tx_timestamp = timestamp_of_tx;
         transmit_statistics.bad_timestamps_count++;
-        debug__printf_to_buf_append_time(0,"-  New Max Delta: %u  Seq : %u\n", (unsigned int)transmit_statistics.max_tx_timestamp_delta, sequence_number);
+        radio__printf(true, "-  New Max Delta: %u  Seq : %u\n", (unsigned int)transmit_statistics.max_tx_timestamp_delta, sequence_number);
     }
     else if (tx_delta < stereo_or_mono_config->acceptable_tx_microsecond_delta_lower)
     {
@@ -183,15 +185,15 @@ bool radio_statistics__note_successful_tx(uint32_t sequence_number, uint32_t tim
         transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count].timestamp_delta_from_previous = tx_delta;
         transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count].tx_timestamp = timestamp_of_tx;
         transmit_statistics.bad_timestamps_count++;
-        debug__printf_to_buf_append_time(0,"-  New Min Delta: %u  Seq : %u\n", (unsigned int)transmit_statistics.min_tx_timestamp_delta, sequence_number);
+        radio__printf(true, "-  New Min Delta: %u  Seq : %u\n", (unsigned int)transmit_statistics.min_tx_timestamp_delta, sequence_number);
     }
 
     if (transmit_statistics.bad_timestamps_count > BAD_TIMESTAMPS_SIZE)
     {
-        debug__printf_to_buf_append_time(0,"-  Bad Timestamps Limit Reached: \n");
+        radio__printf(true, "-  Bad Timestamps Limit Reached: \n");
         for (uint32_t i = 0; i < transmit_statistics.bad_timestamps_count; i++)
         {
-            debug__printf_to_buf_append_time(0,"  %u -- Seq: %u - Delta: %u - Timestamp: %u\n",
+            radio__printf(true, "  %u -- Seq: %u - Delta: %u - Timestamp: %u\n",
                    (unsigned int)i,
                    (unsigned int)transmit_statistics.bad_timestamps[i].sequence_number,
                    (unsigned int)transmit_statistics.bad_timestamps[i].timestamp_delta_from_previous,
