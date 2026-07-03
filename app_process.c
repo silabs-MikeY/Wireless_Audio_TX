@@ -44,11 +44,13 @@
 #include "scheduler.h"
 #include "sl_iostream.h"
 #include "app_process.h"
+#include "audio_pipeline.h"
 #include "hardware_config.h"
 // #include "radio.h"
 #include "state_machine.h"
 #include "generic.h"
 #include "counters_new.h"
+#include "wdog.h"
 
 #if defined(SL_CATALOG_KERNEL_PRESENT)
 #include "app_task_init.h"
@@ -328,14 +330,17 @@ void app_process_action(RAIL_Handle_t rail_handle)
   RESET_LOOP_IF_NECESSARY()
 
   debug__check_print_buffers_and_print();
-  counters_new__run_print_state_machine();
+  counters__run_print_state_machine();
   RESET_LOOP_IF_NECESSARY()
 
-  uint8_t* new_data_pointer = 0;
-  if (adc__get_new_packet_ready_for_processing(&new_data_pointer) == true)
-    {
-      rgb__check_level(new_data_pointer);
-    }
+  audio_pipeline__run_process();
+  RESET_LOOP_IF_NECESSARY()
+
+  // uint8_t* new_data_pointer = 0;
+  // if (adc__get_new_packet_ready_for_processing(&new_data_pointer) == true)
+  //   {
+  //     rgb__check_level(new_data_pointer);
+  //   }
   RESET_LOOP_IF_NECESSARY()
 
   //     check_flags();
@@ -508,6 +513,39 @@ void app_process_action(RAIL_Handle_t rail_handle)
   //      //      printf_to_buf_append_time(0,"\n\n\n");
   //    }
 }
+
+ void run_scheduler_1_ms(void)
+ {
+  uint32_t current_millisecond_ticks = scheduler__get_millisecond_ticks();
+
+  rgb__run_signal_intensity_state_machine(current_millisecond_ticks);
+  rgb__run_radio_status_blink(current_millisecond_ticks);
+ }
+
+ void run_scheduler_10_ms(void)
+ {
+  WDOGn_Feed(WDOG0);
+ }
+
+ void run_scheduler_100_ms(void)
+ {
+
+ }
+
+ void run_scheduler_1s(void)
+ {
+  static uint32_t delay_start = 3;
+  if (delay_start == 0)
+  {
+    //counters__one_second_print();
+    counters__save_and_print_counters(scheduler__get_microsecond_ticks());
+  }
+  else
+  {
+    delay_start--;
+  }
+ }
+
 /******************************************************************************
  * RAIL callback, called if a RAIL event occurs
  *****************************************************************************/

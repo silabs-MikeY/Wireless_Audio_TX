@@ -8,7 +8,11 @@
 #include "generic.h"
 #include "em_cmu.h"
 #include "em_rmu.h"
-#include "print.h"
+#include <stdbool.h>
+#include "print_interfacing.h"
+
+void wdog__printf(bool add_timestamp, const char *format, ...);
+void wdog__on_irq(void);
 
 void wdog__init(void);
 

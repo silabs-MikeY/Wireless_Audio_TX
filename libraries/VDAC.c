@@ -1,3 +1,6 @@
+#define VDAC_COMPILE 0
+#if (VDAC_COMPILE == 1)
+
 #include <stdio.h>
 #include <assert.h>
 
@@ -170,3 +173,5 @@ void vdac__init_vdac(void)
   //init_vdac_output();
   //init_vdac_interrupt();
 }
+
+#endif /* VDAC_H_ */

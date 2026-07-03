@@ -1,14 +1,29 @@
 #include "wdog.h"
 
+#include <stdarg.h>
+#include <stdio.h>
+
+__attribute__((weak)) void wdog__printf(bool add_timestamp, const char *format, ...)
+{
+  (void)add_timestamp;
+  (void)format;
+  return;
+}
+
+__attribute__((weak)) void wdog__on_irq(void)
+{
+  wdog__printf(true, "WDOG HIT\n");
+
+  reset_device();
+  //assert(0);
+}
+
 void WDOG0_IRQHandler(void)
 {
   uint32_t flags = WDOGn_IntGet(WDOG0);
   WDOGn_IntClear(WDOG0, flags);
 
-  debug__printf_to_buf_append_time(0,"WDOG HIT\n");
-
-  reset_device();
-  //assert(0);
+  wdog__on_irq();
 }
 
 void wdog__init(void)
@@ -22,7 +37,7 @@ void wdog__init(void)
   
   if (CMU_ClockSelectGet(cmuClock_WDOG0) != cmuSelect_ULFRCO)
   {
-    debug__printf_to_buf_append_time(0,"WDOG Clock is Set Wrong: \n");
+    wdog__printf(true, "WDOG Clock is Set Wrong: \n");
     CMU_ClockSelectSet(cmuClock_WDOG0, cmuSelect_ULFRCO);
   }
 

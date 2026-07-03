@@ -10,19 +10,32 @@
 #include "em_usart.h"
 #include "sl_hal_ldma.h"
 
+#include <string.h>
+
 static void adc__init_i2s(void);
-static void adc__ldma_init_2(void);
+static void adc__ldma_init(void);
 static void adc__wait_for_startup_validation(void);
 static void adc__print_startup_buffer_preview(const char *buffer_name, const volatile uint8_t *buffer);
 static void adc__print_sample_format_summary(void);
+static bool DMA_left_callback(unsigned int channel, unsigned int sequenceNo, void *userParam);
+static bool DMA_right_callback(unsigned int channel, unsigned int sequenceNo, void *userParam);
+
+typedef struct adc_dma_buffer_s {
+  volatile uint8_t data[ADC_BUFFER_SIZE] __attribute__((aligned(4)));
+  bool used;
+  bool processed;
+  uint32_t micros_timestamp;
+} adc_dma_buffer_t;
+
+static bool adc__start_left_dma_transfer(uint32_t buffer_index);
+static bool adc__start_right_dma_transfer(uint32_t buffer_index);
+static bool adc__dma_buffer_is_ready_for_write(const adc_dma_buffer_t *buffer);
 
 typedef enum adc_counter_index_s {
   ADC_COUNTER_SAMPLES_RECEIVED_LEFT = 0,
   ADC_COUNTER_SAMPLES_RECEIVED_RIGHT = 1,
   ADC_COUNTER_BYTES_RECEIVED_LEFT = 2,
   ADC_COUNTER_BYTES_RECEIVED_RIGHT = 3,
-  ADC_COUNTER_BYTES_OUTPUT_LEFT = 4,
-  ADC_COUNTER_BYTES_OUTPUT_RIGHT = 5,
   ADC_NUMBER_OF_COUNTERS
 } adc_counter_index_t;
 
@@ -32,8 +45,6 @@ static const char *adc_counter_names[ADC_NUMBER_OF_COUNTERS] = {
   "adc_samples_received_right",
   "adc_bytes_received_left",
   "adc_bytes_received_right",
-  "adc_bytes_output_left",
-  "adc_bytes_output_right",
 };
 
 volatile bool library_initialized = false;
@@ -43,11 +54,11 @@ LDMA_Descriptor_t rightDesc[2];
 LDMA_TransferCfg_t leftCfg;
 LDMA_TransferCfg_t rightCfg;
 
-volatile uint8_t leftBuffer_1[BUFFER_SIZE] __attribute__((aligned(4)));; 
-volatile uint8_t leftBuffer_2[BUFFER_SIZE] __attribute__((aligned(4)));;
+static adc_dma_buffer_t leftBuffers[ADC_DMA_BUFFER_COUNT];
+static adc_dma_buffer_t rightBuffers[ADC_DMA_BUFFER_COUNT];
 
-volatile uint8_t rightBuffer_1[BUFFER_SIZE] __attribute__((aligned(4)));;
-volatile uint8_t rightBuffer_2[BUFFER_SIZE] __attribute__((aligned(4)));;
+static volatile uint32_t left_dma_buffer_index = 0;
+static volatile uint32_t right_dma_buffer_index = 0;
 
 volatile bool new_data_ready_flag = false;
 volatile uint32_t *new_data_pointer;
@@ -55,17 +66,17 @@ volatile uint32_t *new_data_pointer;
 volatile uint8_t *leftBuffer_to_process;
 volatile uint8_t *rightBuffer_to_process;
 
-volatile uint32_t (*leftBuffer_output)[BUFFER_SIZE];
-volatile uint32_t (*rightBuffer_output)[BUFFER_SIZE];
+volatile uint32_t (*leftBuffer_output)[ADC_BUFFER_SIZE];
+volatile uint32_t (*rightBuffer_output)[ADC_BUFFER_SIZE];
 
-volatile uint8_t leftBuffer_converted[BUFFER_SIZE] __attribute__((aligned(4)));;
-volatile uint8_t rightBuffer_converted[BUFFER_SIZE] __attribute__((aligned(4)));;
+volatile uint8_t leftBuffer_converted[ADC_BUFFER_SIZE] __attribute__((aligned(4)));;
+volatile uint8_t rightBuffer_converted[ADC_BUFFER_SIZE] __attribute__((aligned(4)));;
 
-volatile uint32_t leftBuffer_converted_word[BUFFER_SIZE / 4];
-volatile uint32_t rightBuffer_converted_word[BUFFER_SIZE / 4];
+volatile uint32_t leftBuffer_converted_word[ADC_BUFFER_SIZE / 4];
+volatile uint32_t rightBuffer_converted_word[ADC_BUFFER_SIZE / 4];
 
-volatile uint8_t leftBuffer_test[BUFFER_SIZE] __attribute__((aligned(4)));;
-volatile uint8_t rightBuffer_test[BUFFER_SIZE] __attribute__((aligned(4)));;
+volatile uint8_t leftBuffer_test[ADC_BUFFER_SIZE] __attribute__((aligned(4)));;
+volatile uint8_t rightBuffer_test[ADC_BUFFER_SIZE] __attribute__((aligned(4)));;
 
 unsigned int LDMA_CHANNEL_LEFT;
 unsigned int LDMA_CHANNEL_RIGHT;
@@ -88,22 +99,16 @@ bool new_packet_ready_right_flag = false;
 uint8_t *new_packet_left_pointer = 0;
 uint8_t *new_packet_right_pointer = 0;
 
-__attribute__((weak)) void adc__process_left_buffer(uint8_t *buffer)
+__attribute__((weak)) uint32_t adc__get_microsecond_ticks(void)
 {
-  (void)buffer;
-  assert(0); // This function should be implemented by the user to process left channel audio data.
-}
-
-__attribute__((weak)) void adc__process_right_buffer(uint8_t *buffer)
-{
-  (void)buffer;
-  assert(0); // This function should be implemented by the user to process right channel audio data.
+  return DWT->CYCCNT;
 }
 
 __attribute__((weak)) void adc__printf(bool add_timestamp, const char *format, ...)
 {
   (void)add_timestamp;
   (void)format;
+  return;
 }
 
 /**
@@ -186,8 +191,96 @@ void adc__reset_counters(void)
   adc_counter_values[ADC_COUNTER_SAMPLES_RECEIVED_RIGHT] = 0;
   adc_counter_values[ADC_COUNTER_BYTES_RECEIVED_LEFT] = 0;
   adc_counter_values[ADC_COUNTER_BYTES_RECEIVED_RIGHT] = 0;
-  adc_counter_values[ADC_COUNTER_BYTES_OUTPUT_LEFT] = 0;
-  adc_counter_values[ADC_COUNTER_BYTES_OUTPUT_RIGHT] = 0;
+}
+
+bool adc__get_oldest_left_dma_buffer(uint8_t **buffer, uint32_t *buffer_index, uint32_t* buffer_size)
+{
+  uint32_t oldest_index_timestamp = 0xFFFFFFFF;
+  bool found = false;
+
+  if ((buffer == NULL) || (buffer_index == NULL) || (buffer_size == NULL))
+  {
+    return false;
+  }
+
+  for (uint32_t i = 0; i < ADC_DMA_BUFFER_COUNT; i++)
+  {
+    if ((leftBuffers[i].used == true) && (leftBuffers[i].processed == false))
+    {
+      if (leftBuffers[i].micros_timestamp < oldest_index_timestamp)
+      {
+        oldest_index_timestamp = leftBuffers[i].micros_timestamp;
+        *buffer_index = i;
+        found = true;
+      }
+    }
+  }
+
+  if (found == true)
+  {
+    *buffer = (uint8_t *)leftBuffers[*buffer_index].data;
+    *buffer_size = sizeof(leftBuffers[*buffer_index].data);
+  }
+
+  return found;
+}
+
+static bool adc__dma_buffer_is_ready_for_write(const adc_dma_buffer_t *buffer)
+{
+  if (buffer == NULL)
+  {
+    return false;
+  }
+
+  return !((buffer->used == true) && (buffer->processed == false));
+}
+
+bool adc__get_oldest_right_dma_buffer(uint8_t **buffer, uint32_t *buffer_index, uint32_t* buffer_size)
+{
+  uint32_t oldest_index_timestamp = 0xFFFFFFFF;
+  bool found = false;
+
+  if ((buffer == NULL) || (buffer_index == NULL) || (buffer_size == NULL))
+  {
+    return false;
+  }
+
+  for (uint32_t i = 0; i < ADC_DMA_BUFFER_COUNT; i++)
+  {
+    if ((rightBuffers[i].used == true) && (rightBuffers[i].processed == false))
+    {
+      if (rightBuffers[i].micros_timestamp < oldest_index_timestamp)
+      {
+        oldest_index_timestamp = rightBuffers[i].micros_timestamp;
+        *buffer_index = i;
+        found = true;
+      }
+    }
+  }
+
+  if (found == true)
+  {
+    *buffer = (uint8_t *)rightBuffers[*buffer_index].data;
+    *buffer_size = sizeof(rightBuffers[*buffer_index].data);
+  }
+
+  return found;
+}
+
+void adc__mark_left_dma_buffer_stale(uint32_t buffer_index)
+{
+  if (buffer_index < ADC_DMA_BUFFER_COUNT)
+  {
+    leftBuffers[buffer_index].processed = true;
+  }
+}
+
+void adc__mark_right_dma_buffer_stale(uint32_t buffer_index)
+{
+  if (buffer_index < ADC_DMA_BUFFER_COUNT)
+  {
+    rightBuffers[buffer_index].processed = true;
+  }
 }
 
 /**
@@ -209,9 +302,11 @@ void adc__init(bool is_stereo)
   stereo_flag = is_stereo;
   adc__printf(true, "ADC Init Stereo Flag: %u\n", (unsigned int)stereo_flag);
   adc__reset_counters();
+  memset((void *)leftBuffers, 0, sizeof(leftBuffers));
+  memset((void *)rightBuffers, 0, sizeof(rightBuffers));
   startup_left_buffer_ready = false;
   startup_right_buffer_ready = false;
-  adc__ldma_init_2();
+  adc__ldma_init();
   adc__init_i2s();
   USART_Enable(USART0, usartEnable);
   adc__wait_for_startup_validation();
@@ -368,14 +463,55 @@ static void adc__print_startup_buffer_preview(const char *buffer_name, const vol
   }
 }
 
+static bool adc__start_left_dma_transfer(uint32_t buffer_index)
+{
+  Ecode_t status = DMADRV_PeripheralMemory(LDMA_CHANNEL_LEFT,
+                                           dmadrvPeripheralSignal_USART0_RXDATAV,
+                                           (void *)leftBuffers[buffer_index].data,
+                                           (void *)&(USART0->RXDATA),
+                                           true,
+                                           ADC_BUFFER_SIZE,
+                                           dmadrvDataSize1,
+                                           DMA_left_callback,
+                                           NULL);
+
+  if (status != ECODE_EMDRV_DMADRV_OK)
+  {
+    adc__printf(true, "LDMA left start error: %X\n", (unsigned int)status);
+    return false;
+  }
+
+  return true;
+}
+
+static bool adc__start_right_dma_transfer(uint32_t buffer_index)
+{
+  Ecode_t status = DMADRV_PeripheralMemory(LDMA_CHANNEL_RIGHT,
+                                           dmadrvPeripheralSignal_USART0_RXDATAVRIGHT,
+                                           (void *)rightBuffers[buffer_index].data,
+                                           (void *)&(USART0->RXDATA),
+                                           true,
+                                           ADC_BUFFER_SIZE,
+                                           dmadrvDataSize1,
+                                           DMA_right_callback,
+                                           NULL);
+
+  if (status != ECODE_EMDRV_DMADRV_OK)
+  {
+    adc__printf(true, "LDMA right start error: %X\n", (unsigned int)status);
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * @brief DMA callback for left channel audio transfer completion.
  * Called when LDMA finishes transferring a left audio buffer.
- * Sets leftBuffer_to_process to the completed buffer (1 or 2).
- * Currently only functional in stereo mode.
+ * Advances the five-buffer linear ring and re-arms the next transfer.
  * 
  * @param channel - LDMA channel identifier (unused)
- * @param sequenceNo - Sequence number indicating which buffer (0 or 1)
+ * @param sequenceNo - Sequence number indicating which buffer completed
  * @param userParam - User parameter (unused)
  * @return true always
  */
@@ -387,29 +523,43 @@ static bool DMA_left_callback(unsigned int channel, unsigned int sequenceNo, voi
 
    // printf_to_buf_append_time(0,"Left ADC seq: %X\n",(unsigned int)sequenceNo);
 
+  // adc__printf(true, "ADC left buffer finished: %u\n", (unsigned int)left_dma_buffer_index);
+
   startup_left_buffer_ready = true;
-  adc_counter_values[ADC_COUNTER_SAMPLES_RECEIVED_LEFT] += RADIO_PACKET_DATA_SIZE_PER_CHANNEL >> 1; // divide by 2
-  adc_counter_values[ADC_COUNTER_BYTES_RECEIVED_LEFT] += BUFFER_SIZE;
+  adc_counter_values[ADC_COUNTER_SAMPLES_RECEIVED_LEFT] += ADC_BUFFER_SIZE >> 2; // divide by sample size
+  adc_counter_values[ADC_COUNTER_BYTES_RECEIVED_LEFT] += ADC_BUFFER_SIZE;
+
+  leftBuffers[left_dma_buffer_index].used = true;
+  leftBuffers[left_dma_buffer_index].processed = false;
+  leftBuffers[left_dma_buffer_index].micros_timestamp = adc__get_microsecond_ticks();
+
+  leftBuffer_to_process = (volatile uint8_t *)leftBuffers[left_dma_buffer_index].data;
+
+  left_dma_buffer_index++;
+  if (left_dma_buffer_index >= ADC_DMA_BUFFER_COUNT)
+  {
+    left_dma_buffer_index = 0;
+  }
+
+  if (adc__dma_buffer_is_ready_for_write(&leftBuffers[left_dma_buffer_index]) == false)
+  {
+    adc__printf(true,
+                "ADC left DMA buffer %u not stale yet, overwriting oldest unread data\n",
+                (unsigned int)left_dma_buffer_index);
+  }
+
+  if (adc__start_left_dma_transfer(left_dma_buffer_index) == false)
+  {
+    assert(0);
+  }
 
   if (stereo_flag == false)
   {
     return true;
   }
 
-  if (sequenceNo & 0x1)
-  {
-    leftBuffer_to_process = leftBuffer_1;
-  }
-  else
-  {
-    leftBuffer_to_process = leftBuffer_2;
-  }
-
   new_data_pointer = (volatile uint32_t *)leftBuffer_to_process;
   new_data_ready_flag = true;
-
-  adc_counter_values[ADC_COUNTER_BYTES_OUTPUT_LEFT] += RADIO_PACKET_DATA_SIZE;
-  adc__process_left_buffer((uint8_t *)leftBuffer_to_process);
 
   return true;
 }
@@ -417,11 +567,11 @@ static bool DMA_left_callback(unsigned int channel, unsigned int sequenceNo, voi
 /**
  * @brief DMA callback for right channel audio transfer completion.
  * Called when LDMA finishes transferring a right audio buffer.
- * Truncates 32-bit I2S data to 16-bit format and adds to audio buffer queue.
+ * Advances the five-buffer linear ring and re-arms the next transfer.
  * Called from interrupt context, so very timing-critical.
  * 
  * @param channel - LDMA channel identifier (unused)
- * @param sequenceNo - Sequence number indicating which buffer (0 or 1)
+ * @param sequenceNo - Sequence number indicating which buffer completed
  * @param userParam - User parameter (unused)
  * @return true always
  */
@@ -433,24 +583,38 @@ static bool DMA_right_callback(unsigned int channel, unsigned int sequenceNo, vo
 
   //  printf_to_buf_append_time(0,"Right ADC seq: %X\n",(unsigned int)sequenceNo);
 
-  startup_right_buffer_ready = true;
-  adc_counter_values[ADC_COUNTER_SAMPLES_RECEIVED_RIGHT] += RADIO_PACKET_DATA_SIZE_PER_CHANNEL >> 1; // divide by 2
-  adc_counter_values[ADC_COUNTER_BYTES_RECEIVED_RIGHT] += BUFFER_SIZE;
+  // adc__printf(true, "ADC right buffer finished: %u\n", (unsigned int)right_dma_buffer_index);
 
-  if (sequenceNo & 0x1)
+  startup_right_buffer_ready = true;
+  adc_counter_values[ADC_COUNTER_SAMPLES_RECEIVED_RIGHT] += ADC_BUFFER_SIZE >> 2; // divide by sample size
+  adc_counter_values[ADC_COUNTER_BYTES_RECEIVED_RIGHT] += ADC_BUFFER_SIZE;
+
+  rightBuffers[right_dma_buffer_index].used = true;
+  rightBuffers[right_dma_buffer_index].processed = false;
+  rightBuffers[right_dma_buffer_index].micros_timestamp = adc__get_microsecond_ticks();
+
+  rightBuffer_to_process = (volatile uint8_t *)rightBuffers[right_dma_buffer_index].data;
+
+  right_dma_buffer_index++;
+  if (right_dma_buffer_index >= ADC_DMA_BUFFER_COUNT)
   {
-    rightBuffer_to_process = rightBuffer_1;
+    right_dma_buffer_index = 0;
   }
-  else
+
+  if (adc__dma_buffer_is_ready_for_write(&rightBuffers[right_dma_buffer_index]) == false)
   {
-    rightBuffer_to_process = rightBuffer_2;
+    adc__printf(true,
+                "ADC right DMA buffer %u not stale yet, overwriting oldest unread data\n",
+                (unsigned int)right_dma_buffer_index);
+  }
+
+  if (adc__start_right_dma_transfer(right_dma_buffer_index) == false)
+  {
+    assert(0);
   }
 
   new_data_pointer = (volatile uint32_t *)rightBuffer_to_process;
   new_data_ready_flag = true;
-
-  adc_counter_values[ADC_COUNTER_BYTES_OUTPUT_RIGHT] += RADIO_PACKET_DATA_SIZE;
-  adc__process_right_buffer((uint8_t *)rightBuffer_to_process);
 
   return true;
 }
@@ -535,15 +699,15 @@ void adc__init_i2s(void)
 
 /**
  * @brief Initializes LDMA (Linked DMA) for audio data transfers.
- * Allocates two DMA channels (left and right) and configures ping-pong transfers.
- * Sets up transfers from USART0 RX (I2S data) to dual audio buffers.
+ * Allocates two DMA channels (left and right) and configures five-buffer linear rings.
+ * Sets up transfers from USART0 RX (I2S data) to the buffer ring for each channel.
  * Attaches DMA callbacks for buffer completion notification.
  * Must be called before I2S initialization.
  * 
  * @param None
  * @return void
  */
-void adc__ldma_init_2(void)
+void adc__ldma_init(void)
 {
   CMU_ClockEnable(cmuClock_LDMA, true);
   Ecode_t DMADRV_return_status;
@@ -571,18 +735,17 @@ void adc__ldma_init_2(void)
   }
   adc__printf(true, "Got RX Right DMA Channel: %u\n", (unsigned int)LDMA_CHANNEL_RIGHT);
 
-  DMADRV_return_status = DMADRV_PeripheralMemoryPingPong(LDMA_CHANNEL_LEFT, dmadrvPeripheralSignal_USART0_RXDATAV, (void *)leftBuffer_1, (void *)leftBuffer_2, (void *)&(USART0->RXDATA), true, BUFFER_SIZE, SL_HAL_LDMA_CTRL_SIZE_BYTE, DMA_left_callback, NULL);
-  if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
+  left_dma_buffer_index = 0;
+  right_dma_buffer_index = 0;
+
+  if (adc__start_left_dma_transfer(left_dma_buffer_index) == false)
   {
-    adc__printf(true, "LDMA_CHANNEL_RX_LEFT start Error: %X\n", (unsigned int)DMADRV_return_status);
     assert(0);
   }
   adc__printf(true, "Started LDMA_CHANNEL_RX_LEFT\n");
 
-  DMADRV_return_status = DMADRV_PeripheralMemoryPingPong(LDMA_CHANNEL_RIGHT, dmadrvPeripheralSignal_USART0_RXDATAVRIGHT, (void *)rightBuffer_1, (void *)rightBuffer_2, (void *)&(USART0->RXDATA), true, BUFFER_SIZE, SL_HAL_LDMA_CTRL_SIZE_BYTE, DMA_right_callback, NULL);
-  if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK)
+  if (adc__start_right_dma_transfer(right_dma_buffer_index) == false)
   {
-    adc__printf(true, "LDMA_CHANNEL_RX_RIGHT start Error: %X\n", (unsigned int)DMADRV_return_status);
     assert(0);
   }
   adc__printf(true, "Started LDMA_CHANNEL_RX_RIGHT\n");

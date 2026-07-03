@@ -20,7 +20,7 @@ static uint32_t counters_used_count = 0;
 static bool printing_flag = false;
 static uint32_t printing_counter_index = 0;
 
-static void counters_new__save_counters(void);
+static void counters__save_counters(void);
 
 // // User implementation of the weak function to get counter values. 
 // // This should be overridden in the application code and return requested counter value based on the index. 
@@ -30,22 +30,26 @@ static void counters_new__save_counters(void);
 //     return 0;
 // }
 
-__attribute__((weak)) void counters_new__printf(bool add_timestamp, const char *format, ...)
+__attribute__((weak)) void counters__printf(bool add_timestamp, const char *format, ...)
 {
     (void)add_timestamp;
     (void)format;
 }
 
-__attribute__((weak)) void counters_new__process_counter_reset(void)
+__attribute__((weak)) void counters__process_counter_reset(void)
 {
 }
 
-__attribute__((weak)) void counters_new__pre_save_hook(void)
+__attribute__((weak)) void counters__pre_save_hook(void)
+{
+}
+
+__attribute__((weak)) void counters__post_print_hook(void)
 {
 }
 
 // Register a new counter with a name and get its index. Returns 0 on success, negative value on error.
-int32_t counters_new__register_counter(const char* input_counter_name, uint32_t* input_counter_address)
+int32_t counters__register_counter(const char* input_counter_name, uint32_t* input_counter_address)
 {
     if (counters_used_count >= COUNTER_BUFFER_MAX_COUNT)
     {
@@ -62,13 +66,13 @@ int32_t counters_new__register_counter(const char* input_counter_name, uint32_t*
     new_counters[counters_used_count].counter_name = input_counter_name;
     new_counters[counters_used_count].counter_address = input_counter_address;
     new_counters[counters_used_count].saved_counter_value = 0; // Initialize the saved counter value to 0
-    counters_new__printf(true, "Registered counter: %s at index %u\n", input_counter_name, counters_used_count);
+    counters__printf(true, "Registered counter: %s at index %u\n", input_counter_name, counters_used_count);
     counters_used_count++;
     return 0;
 }
 
 // Saves the current counter values to non-volatile storage.
-static void counters_new__save_counters(void)
+static void counters__save_counters(void)
 {
     for (uint32_t i = 0; i < counters_used_count; i++)
     {
@@ -81,41 +85,42 @@ static void counters_new__save_counters(void)
     }
 }
 
-void counters_new__save_and_print_counters(uint32_t current_timestamp)
+void counters__save_and_print_counters(uint32_t current_timestamp)
 {
     CORE_DECLARE_IRQ_STATE;
     CORE_ENTER_CRITICAL();
-    counters_new__pre_save_hook();
-    counters_new__save_counters();
-    counters_new__process_counter_reset();
+    counters__pre_save_hook();
+    counters__save_counters();
+    counters__process_counter_reset();
     CORE_EXIT_CRITICAL();
 
     printing_flag = true;
     printing_counter_index = 0;
-    counters_new__printf(false, "\n");
-    counters_new__printf(true, "Counters saved at timestamp: %u", (unsigned int)current_timestamp);
+    counters__printf(false, "\n");
+    counters__printf(true, "Counters saved at timestamp: %u", (unsigned int)current_timestamp);
 
 }
 
-void counters_new__run_print_state_machine(void)
+void counters__run_print_state_machine(void)
 {
     if (printing_flag)
     {
         if (printing_counter_index < counters_used_count)
         {
             // Print the counter name and value
-            counters_new__printf(false, " %u : %s, %u\n", printing_counter_index, new_counters[printing_counter_index].counter_name, new_counters[printing_counter_index].saved_counter_value);
+            counters__printf(false, " %u : %s, %u\n", printing_counter_index, new_counters[printing_counter_index].counter_name, new_counters[printing_counter_index].saved_counter_value);
             printing_counter_index++;
         }
         else
         {
-            counters_new__printf(false, "\n");
+            counters__printf(false, "\n");
             printing_flag = false; // Finished printing all counters
+            counters__post_print_hook();
         }
     }
 }
 
-void counters_new__init()
+void counters__init(void)
 {
     counters_used_count = 0;
     memset(new_counters, 0, sizeof(new_counters));

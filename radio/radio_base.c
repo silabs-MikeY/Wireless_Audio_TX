@@ -47,7 +47,6 @@ void radio__increment_sequence_number(void)
 
   // counters__set_counter(sequence_number_at_end, next_sequence_number);
 
-#define DEBUG_TEST_MISSING_SEQUENCE_NUMBER 1 // forces a sequence number to be skipped
 #if (DEBUG_TEST_MISSING_SEQUENCE_NUMBER == 1)
   if (next_sequence_number == 1000)
   {

@@ -28,7 +28,8 @@ target_sources(TX_Board PRIVATE
 	"../radio/radio_statistics.c"
 	"../radio/radio_transmit.c"
 	"../counter_interface.c"
-	"../audio_processing.c"
+	"../audio_pipeline.c"
+	"../audio_encoding.c"
 	"../adpcm.c"
 )
 

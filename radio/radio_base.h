@@ -19,6 +19,8 @@
 
 #define ENABLE_PRS 0
 
+#define DEBUG_TEST_MISSING_SEQUENCE_NUMBER 0 // forces a sequence number to be skipped
+
 #define NUMBER_OF_PACKET_BUFFERS 20
 
 #define CONTROL_BITS__STEREO BIT(0)

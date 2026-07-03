@@ -7,6 +7,8 @@
 #include "radio_transmit.h"
 #include "microseconds.h"
 #include "scheduler.h"
+#include "audio_pipeline.h"
+#include "audio_ring_buffer.h"
 
 typedef struct counter_provider_s {
   uint32_t (*get_number_of_counters)(void);
@@ -27,7 +29,7 @@ static void counter_interface__register_provider(const counter_provider_t *provi
 
     if ((counter_name != NULL) && (counter_value != NULL))
     {
-      counters_new__register_counter(counter_name, (uint32_t *)counter_value);
+      counters__register_counter(counter_name, (uint32_t *)counter_value);
     }
   }
 }
@@ -42,7 +44,9 @@ static const counter_provider_t counter_providers[] = {
   { microseconds__get_number_of_counters, microseconds__get_counter_name, microseconds__get_counter_address },
   { app_process__get_number_of_counters, app_process__get_counter_name, app_process__get_counter_address },
   { adc__get_number_of_counters, adc__get_counter_name, adc__get_counter_address },
-  { audio_buffers__get_number_of_counters, audio_buffers__get_counter_name, audio_buffers__get_counter_value },
+  { audio_pipeline__get_number_of_counters, audio_pipeline__get_counter_name, audio_pipeline__get_counter_address },
+  // { audio_buffers__get_number_of_counters, audio_pipeline__get_counter_address`, audio_pipeline__get_counter_address },
+  { ring_buffer__get_number_of_counters, ring_buffer__get_counter_name, ring_buffer__get_counter_address },
   { radio_transmit__get_number_of_counters, radio_transmit__get_counter_name, radio_transmit__get_counter_address },
 };
 
@@ -51,7 +55,9 @@ static const counter_reset_t counter_resets[] = {
   { radio_transmit__reset_counters },
   { scheduler__reset_counters },
   { adc__reset_counters },
-  { audio_buffers__reset_counters },
+  { audio_pipeline__reset_counters },
+  // { audio_buffers__reset_counters },
+  { ring_buffer__reset_counters },
 };
 
 
@@ -68,7 +74,11 @@ void counter_interface__register_counters(void)
   }
 }
 
-void counters_new__process_counter_reset(void)
+// -----------------------------------------------------------------------------
+//                     Weak function implementations, do not rename.
+// -----------------------------------------------------------------------------
+
+void counters__process_counter_reset(void)
 {
   for (uint32_t reset_index = 0; reset_index < (sizeof(counter_resets) / sizeof(counter_resets[0])); reset_index++)
   {
@@ -76,7 +86,16 @@ void counters_new__process_counter_reset(void)
   }
 }
 
-void counters_new__pre_save_hook(void)
+void counters__pre_save_hook(void)
 {
   microseconds__trigger_counter_update();
 }
+
+void counters__post_print_hook(void)
+{
+  counters__printf(true, "Details:\n");
+}
+
+// -----------------------------------------------------------------------------
+//                     Weak function implementations End
+// -----------------------------------------------------------------------------

@@ -4,6 +4,14 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-void copy_data_into_buffer(uint8_t *input_data, bool right_data, uint32_t input_data_size_bytes);
+// Counters
+uint32_t ring_buffer__get_number_of_counters(void);
+const char* ring_buffer__get_counter_name(uint32_t counter_index);
+volatile uint32_t* ring_buffer__get_counter_address(uint32_t counter_index);
+void ring_buffer__reset_counters(void);
+// Counters End
+
+void ring_buffer__copy_data_into_ring_buffer(uint8_t *input_data, bool right_data, uint32_t input_data_size_bytes);
+void ring_buffer__init(bool is_stereo, bool enable_encoder);
 
 #endif // AUDIO_BUFFER_H

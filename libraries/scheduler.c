@@ -5,6 +5,8 @@
 
 #include <assert.h>
 #include <stdbool.h>
+#include <stdarg.h>
+#include <stdio.h>
 #include "em_wdog.h"
 #include "counters_new.h"
 
@@ -28,10 +30,6 @@ bool tick_flag = false;
 
 static uint32_t countdown_5s = 5000;
 
-static void run_scheduler_1_ms(void);
-static void run_scheduler_10_ms(void);
-static void run_scheduler_100_ms(void);
-static void run_scheduler_1s(void);
 static void scheduler__reset_milliseconds(void);
 //bool tick_flag_10ms = false;
 //bool tick_flag_100ms = false
@@ -43,6 +41,13 @@ typedef struct millisseconds_s
     uint32_t next_timestamp_increment;
 } millisseconds_t;
 millisseconds_t milliseconds;
+
+__attribute__((weak)) void scheduler__printf(bool add_timestamp, const char *format, ...)
+{
+  (void)add_timestamp;
+  (void)format;
+  return;
+}
 
 void scheduler__reset_milliseconds(void)
 {
@@ -106,58 +111,46 @@ void SysTick_Handler(void)
 
 void scheduler__deinit_SysTick(void)
 {
-  debug__printf_to_buf_append_time(0,"Starting SysTick DeInit\n");
+  scheduler__printf(true, "Starting SysTick DeInit\n");
   SysTick->CTRL  &= ~SysTick_CTRL_ENABLE_Msk;
 
-  debug__printf_to_buf_append_time(0,"Finish SysTick DeInit\n");
+  scheduler__printf(true, "Finish SysTick DeInit\n");
 }
 
 void scheduler__init_SysTick(void)
 {
-  debug__printf_to_buf_append_time(0,"Starting SysTick\n");
+  scheduler__printf(true, "Starting SysTick\n");
   uint32_t core_speed = CMU_ClockFreqGet(cmuClock_CORE);
-  debug__printf_to_buf_append_time(0,"Core Speed : %u\n", (unsigned int)core_speed);
+  scheduler__printf(true, "Core Speed : %u\n", (unsigned int)core_speed);
   if (SysTick_Config(core_speed/1000) != 0)
     {
-      debug__printf_to_buf_append_time(0,"Systick Failed to start\n");
+      scheduler__printf(true, "Systick Failed to start\n");
       assert(0);
     }
-  microseconds__reset_micros_count();
   scheduler__reset_milliseconds();
-  debug__printf_to_buf_append_time(0,"Systick Started\n");
+  scheduler__printf(true, "Systick Started\n");
 }
 
-static void run_scheduler_1_ms(void)
+__attribute__((weak)) void run_scheduler_1_ms(void)
 {
-  rgb__run_signal_intensity_state_machine(milliseconds.current_millisecond_ticks);
-  rgb__run_radio_status_blink(milliseconds.current_millisecond_ticks);
+  return;
 }
 
-static void run_scheduler_10_ms(void)
+__attribute__((weak)) void run_scheduler_10_ms(void)
 {
-
+  return;
 }
 
-static void run_scheduler_100_ms(void)
+__attribute__((weak)) void run_scheduler_100_ms(void)
 {
-   WDOGn_Feed(WDOG0);
+  return;
    //printf_to_buf_append_time(0,"Feed WDOG\n");
 }
 
 
-static void run_scheduler_1s(void)
+__attribute__((weak)) void run_scheduler_1s(void)
 {
   //radio__validate_radio_statistics();
-  static uint32_t delay_start = 3;
-  if (delay_start == 0)
-  {
-    //counters__one_second_print();
-    counters_new__save_and_print_counters(scheduler__get_microsecond_ticks());
-  }
-  else
-  {
-    delay_start--;
-  }
 }
 
 static void run_scheduler_5s(void)

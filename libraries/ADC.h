@@ -12,13 +12,14 @@ void adc__init(bool is_stereo);
 void adc__deinit(void);
 bool adc__get_audio_stereo_flag(void);
 bool adc__get_new_packet_ready_for_processing(uint8_t** data_pointer);
+bool adc__get_oldest_left_dma_buffer(uint8_t **buffer, uint32_t *buffer_index, uint32_t* buffer_size);
+bool adc__get_oldest_right_dma_buffer(uint8_t **buffer, uint32_t *buffer_index, uint32_t* buffer_size);
+void adc__mark_left_dma_buffer_stale(uint32_t buffer_index);
+void adc__mark_right_dma_buffer_stale(uint32_t buffer_index);
+uint32_t adc__get_microsecond_ticks(void);
 uint32_t adc__get_sample_size_bytes(void);
 bool adc__is_sample_little_endian(void);
 bool adc__is_sample_left_justified(void);
-
-// User should implement these functions to process the left and right audio buffers as needed.
-void adc__process_left_buffer(uint8_t *buffer);
-void adc__process_right_buffer(uint8_t *buffer);
 
 // Optional debug data functions for counters and logging.
 uint32_t adc__get_number_of_counters(void);
@@ -44,10 +45,12 @@ void adc__printf(bool add_timestamp, const char *format, ...);
 #define I2S_MODE          I2S_MODE_SLAVE
 
 // #define BUFFER_SIZE       RADIO_PACKET_DATA_SIZE
-#define BUFFER_SIZE       64
-#if ((BUFFER_SIZE % 4)!=0)
-#error "BUFFER_SIZE must be a multiple of 4!"
+#define ADC_BUFFER_SIZE       128
+#if ((ADC_BUFFER_SIZE % 4)!=0)
+#error "ADC_BUFFER_SIZE must be a multiple of 4!"
 #endif
+
+#define ADC_DMA_BUFFER_COUNT 10
 
 #define BAUD_RATE         (SAMPLE_FREQ * 64)
 
