@@ -1,11 +1,11 @@
 #include "audio_pipeline.h"
 #include "adc.h"
-#include "audio_buffers.h"
+// #include "audio_buffers.h"
 #include "audio_ring_buffer.h"
-#include "radio/radio_transmit.h"
 #include "microseconds.h"
 #include "audio_encoding.h"
 #include "adpcm.h"
+#include "radio_packet_buffers.h"
 #include <string.h>
 
 // -----------------------------------------------------------------------------
@@ -15,6 +15,7 @@
 typedef enum audio_buffers_counter_index_s {
   AUDIO_PIPELINE_LEFT_SAMPLES_PROCESSED = 0,
   AUDIO_PIPELINE_RIGHT_SAMPLES_PROCESSED = 1,
+  AUDIO_PIPELINE_RADIO_PACKETS_BUILT = 2,
   AUDIO_PIPELINE_NUMBER_OF_COUNTERS
 } audio_pipeline_counter_index_t;
 
@@ -22,6 +23,7 @@ static volatile uint32_t audio_pipeline_counter_values[AUDIO_PIPELINE_NUMBER_OF_
 static const char *audio_pipeline_counter_names[AUDIO_PIPELINE_NUMBER_OF_COUNTERS] = {
     "left_samples_processed",
     "right_samples_processed",
+    "radio_packets_built"
 };
 
 uint32_t audio_pipeline__get_number_of_counters(void)
@@ -72,6 +74,11 @@ static void audio_pipeline__process_new_adc_data(uint8_t *buffer,
                                                bool right_channel);
 static void audio_pipeline__check_for_new_adc_data_and_process(void);
 
+void audio_pipeline__try_to_build_radio_packet_from_ring_buffer(void);
+
+// -----------------------------------------------------------------------------
+//                     Audio Pipeline General
+// -----------------------------------------------------------------------------
 
 void audio_pipeline__init(bool is_stereo, bool enable_encoder)
 {
@@ -80,13 +87,62 @@ void audio_pipeline__init(bool is_stereo, bool enable_encoder)
   adpcm_initialized = false;
 }
 
+bool audio_pipeline__is_stereo(void)
+{
+  return stereo_flag;
+}
+
+bool audio_pipeline__is_encoder_enabled(void)
+{
+  return encoder_enabled;
+}
+
 // This function is called from the main application loop to process audio data non-blocking
 void audio_pipeline__run_process(void)
 {
+  audio_pipeline__try_to_build_radio_packet_from_ring_buffer();
   audio_pipeline__check_for_new_adc_data_and_process();
 }
 
-// Process Data Coming from ADC
+// -----------------------------------------------------------------------------
+//                     Audio Pipeline General End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Building Radio Packets from Ring Buffer
+// -----------------------------------------------------------------------------
+
+void audio_pipeline__try_to_build_radio_packet_from_ring_buffer(void)
+{
+  packet_buffer_t *packet_buffer = NULL;
+  uint32_t packet_buffer_index = 0xFFFFFFFF;
+
+  if (radio_packet_buffers__request_available_packet_buffer(&packet_buffer, &packet_buffer_index) == false)
+  {
+    return;
+  }
+
+  if (ring_buffer__build_radio_packet_from_ring_buffer(stereo_flag,
+                                                       encoder_enabled,
+                                                       &packet_buffer->payload) == true)
+  {
+    if (radio_packet_buffers__mark_packet_buffer_used(packet_buffer_index) == false)
+    {
+      assert(0);
+      return;
+    }
+    audio_pipeline_counter_values[AUDIO_PIPELINE_RADIO_PACKETS_BUILT]++;
+  }
+}
+
+// -----------------------------------------------------------------------------
+//                     Building Radio Packets from Ring Buffer End
+// -----------------------------------------------------------------------------
+
+
+// -----------------------------------------------------------------------------
+//                     Incoming ADC Data Processing
+// -----------------------------------------------------------------------------
 
 static void audio_pipeline__check_for_new_adc_data_and_process(void)
 {
@@ -144,11 +200,7 @@ static void audio_pipeline__process_new_adc_data(uint8_t *buffer,
 
     frame_count = buffer_size / sample_size_bytes;
 
-    if (sample_size_bytes == 2)
-    {
-      memcpy(temp_buffer, buffer, buffer_size);
-    }
-    else if (audio_encoding__convert_raw_audio_to_pcm16(buffer, temp_buffer, buffer_size) == false)
+    if (audio_encoding__convert_raw_audio_to_pcm16(buffer, temp_buffer, buffer_size) == false)
     {
       return;
     }
@@ -172,6 +224,9 @@ static void audio_pipeline__process_new_adc_data(uint8_t *buffer,
   return;
 }
 
+// -----------------------------------------------------------------------------
+//                     Incoming ADC Data Processing End
+// -----------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------
 //                     Weak function implementations, do not rename.
@@ -182,8 +237,23 @@ static void audio_pipeline__process_new_adc_data(uint8_t *buffer,
 bool audio_buffers__process_packet(uint8_t *left_or_first_buffer,
                                    uint8_t *right_or_second_buffer,
                                    bool is_stereo) {
-  return radio_transmit__create_new_packet_buffer(
-      left_or_first_buffer, right_or_second_buffer, is_stereo);
+  packet_buffer_t *packet_buffer = NULL;
+  uint32_t packet_buffer_index = 0xFFFFFFFF;
+
+  if (radio_packet_buffers__request_available_packet_buffer(&packet_buffer, &packet_buffer_index) == false)
+  {
+    return false;
+  }
+
+  memcpy(packet_buffer->payload.data_left, left_or_first_buffer, RADIO_PACKET_DATA_SIZE_PER_CHANNEL);
+  memcpy(packet_buffer->payload.data_right, right_or_second_buffer, RADIO_PACKET_DATA_SIZE_PER_CHANNEL);
+
+  if (is_stereo)
+  {
+    packet_buffer->payload.header.control_bits = CONTROL_BITS__STEREO;
+  }
+
+  return radio_packet_buffers__mark_packet_buffer_used(packet_buffer_index);
 }
 
 // Pushes time to the ADC to timestamp the audio data. This implements the weak function defined in adc.c

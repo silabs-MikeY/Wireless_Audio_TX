@@ -1,9 +1,10 @@
 #ifndef RADIO_STATISTICS_H_
 #define RADIO_STATISTICS_H_
 
-#include "radio_base.h"
 #include "hardware_config.h"
-#include "audio_buffers.h"
+#include <stdbool.h>
+#include <stdint.h>
+// #include "audio_buffers.h"
 
 #define NUMBER_OF_SAMPLES_PER_PACKET (RADIO_PACKET_DATA_SIZE / 2)
 #define NUMBER_OF_TX_PER_SECOND_EXPECTED_STEREO (((SAMPLE_FREQ * 2) / NUMBER_OF_SAMPLES_PER_PACKET))
@@ -66,6 +67,6 @@ bool radio_statistics__note_successful_tx(uint32_t sequence_number, uint32_t tim
 void radio_statistics__init(void);
 void radio_statistics__get_min_and_max_transmit_deltas(uint32_t* delta_min, uint32_t* delta_max);
 void radio_statistics__get_number_of_transmits_processed(uint32_t* number_of_transmits_processed);
-void radio_statistics__set_stereo_or_mono_config(bool is_stereo);
+void radio_statistics__set_audio_mode(bool is_stereo, bool encoder_enabled);
 
 #endif

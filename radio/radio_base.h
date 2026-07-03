@@ -23,15 +23,6 @@
 
 #define NUMBER_OF_PACKET_BUFFERS 20
 
-#define CONTROL_BITS__STEREO BIT(0)
-#define CONTROL_BITS__RETRY BIT(1)
-#define CONTROL_BITS__COMMAND_PACKET BIT(2)
-#define CONTROL_BITS__BIT3_UNUSED BIT(3)
-#define CONTROL_BITS__BIT4_UNUSED BIT(4)
-#define CONTROL_BITS__BIT5_UNUSED BIT(5)
-#define CONTROL_BITS__BIT6_UNUSED BIT(6)
-#define CONTROL_BITS__BIT7_UNUSED BIT(7)
-
 uint8_t* radio__get_next_buffer(bool left_or_right_data);
 void radio__process_event(RAIL_Handle_t rail_handle, RAIL_Events_t events);
 void radio__init(void);

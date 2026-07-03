@@ -101,7 +101,7 @@ extern "C"
 // If 1 prints get stored in buffers and printed out later
 // Ensure NUMBER_OF_PRINT_BUFFERS is large enough to hold all prints between debug_print() calls
 // If false, prints go directly to stdout
-#define DEBUG_PRINT_TO_BUFFERS 1
+#define DEBUG_PRINT_TO_BUFFERS 0
 
 // Formats timestamps so they're easier to read. Adds extra processing though
 #define FORMAT_TIMESTAMPS_WITH_COMMAS 1

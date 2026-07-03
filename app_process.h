@@ -35,6 +35,7 @@
 // -----------------------------------------------------------------------------
 #include "rail.h"
 #include "hardware_config.h"
+#include <stdbool.h>
 // -----------------------------------------------------------------------------
 //                              Macros and Typedefs
 // -----------------------------------------------------------------------------
@@ -51,6 +52,9 @@ uint32_t radio__get_channel(void);
 void set_channel(uint32_t new_channel);
 void set_reset_loop_flag(void);
 void reset_app_process_action_run_delta_micros(void);
+void app_process__set_audio_mode(bool is_stereo, bool enable_encoder);
+bool app_process__is_audio_stereo(void);
+bool app_process__is_audio_encoder_enabled(void);
 
 uint32_t app_process__get_number_of_counters(void);
 const char *app_process__get_counter_name(uint32_t counter_index);

@@ -1,19 +1,14 @@
 #include "wdog.h"
 
-#include <stdarg.h>
-#include <stdio.h>
-
 __attribute__((weak)) void wdog__printf(bool add_timestamp, const char *format, ...)
 {
   (void)add_timestamp;
   (void)format;
-  return;
 }
 
 __attribute__((weak)) void wdog__on_irq(void)
 {
   wdog__printf(true, "WDOG HIT\n");
-
   reset_device();
   //assert(0);
 }

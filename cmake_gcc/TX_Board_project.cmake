@@ -9,7 +9,6 @@ target_sources(TX_Board PRIVATE
 	"../audio_ring_buffer.c"
 	"../libraries/RGB.c"
 	"../libraries/VDAC.c"
-	"../libraries/audio_buffers.c"
 	"../libraries/button.c"
 	"../libraries/counters_new.c"
 	"../events_print.c"
@@ -17,7 +16,6 @@ target_sources(TX_Board PRIVATE
 	"../libraries/microseconds.c"
 	"../libraries/print.c"
 	"../print_interfacing.c"
-	"../radio.c"
 	"../libraries/scheduler.c"
 	"../state_machine.c"
 	"../timer_helper.c"
@@ -29,6 +27,7 @@ target_sources(TX_Board PRIVATE
 	"../radio/radio_transmit.c"
 	"../counter_interface.c"
 	"../audio_pipeline.c"
+	"../radio_packet_buffers.c"
 	"../audio_encoding.c"
 	"../adpcm.c"
 )

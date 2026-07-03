@@ -82,7 +82,6 @@ void debug__check_print_buffers_and_print(void)
 // Do nothing if buffered printing is disabled
 void debug__check_print_buffers_and_print(void)
 {
-    (void)debug__check_print_buffers_and_print();
     return;
 }
 #endif
@@ -149,7 +148,9 @@ void printf_to_buf_array(const uint8_t *data, uint32_t data_length, bool line_br
 // Do nothing if buffered printing is disabled
 void printf_to_buf_array(const uint8_t *data, uint32_t data_length, bool line_break_at_end)
 {
-    (void)printf_to_buf_array(data, data_length, line_break_at_end);
+    (void)data;
+    (void)data_length;
+    (void)line_break_at_end;
     return;
 }
 #endif

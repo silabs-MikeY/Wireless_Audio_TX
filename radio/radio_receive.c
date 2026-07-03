@@ -1,6 +1,7 @@
 #include "radio_receive.h"
 
 #include "radio_base.h"
+#include "radio_packet_format.h"
 #include "radio_retry.h"
 #include "print.h"
 

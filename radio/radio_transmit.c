@@ -1,6 +1,7 @@
 #include "radio_transmit.h"
 #include "radio_base.h"
-#include "scheduler.h"
+#include "radio_packet_buffers.h"
+#include "radio_packet_format.h"
 
 #include <string.h>
 
@@ -52,14 +53,8 @@ static const char *radio_transmit_counter_names[RADIO_TRANSMIT_NUMBER_OF_COUNTER
     "number_of_TX_retry_fail_missed",
 };
 
-static void radio_transmit__advance_buffer_head(void);
-static void radio_transmit__mark_packet_as_successfully_sent(uint32_t index_sent);
 static bool radio_transmit__send_packet(uint32_t buffer_index, bool retry);
-static void radio_transmit__check_if_a_packet_has_been_sent_and_process(void);
 static void radio_transmit__increment_counter(uint32_t counter_index);
-
-packet_buffer_t radio_tx_packet_buffer[NUMBER_OF_PACKET_BUFFERS];
-uint32_t packet_buffer_head;
 
 uint8_t radio_tx_fifo[RADIO_FIFO_SIZE] __attribute__((aligned(4)));
 uint32_t radio_tx_fifo_Size = 0;
@@ -130,9 +125,7 @@ void radio__reset_control_bit(uint8_t *control_bits, uint8_t bit)
  */
 void radio_transmit__buffers_reset(void)
 {
-    memset(radio_tx_packet_buffer, 0, sizeof(radio_tx_packet_buffer));
     memset(&tx_packet_in_flight_info, 0, sizeof(tx_packet_in_flight_info_t));
-    packet_buffer_head = 0;
 }
 
 /**
@@ -172,122 +165,9 @@ void radio_transmit__init(void)
     radio__printf(true, "RAIL_SetTxPowerDbm Success\n");
 }
 
-/**
- * @brief Advances the packet buffer head pointer to the next buffer.
- * Wraps around to 0 when reaching NUMBER_OF_PACKET_BUFFERS.
- * Used after filling a buffer to prepare for the next packet.
- *
- * @param None
- * @return void
- */
-static void radio_transmit__advance_buffer_head(void)
+__attribute__((weak)) void radio_transmit__handle_successful_packet_sent(uint32_t packet_buffer_index)
 {
-    packet_buffer_head++;
-    if (packet_buffer_head >= NUMBER_OF_PACKET_BUFFERS)
-    {
-        packet_buffer_head = 0;
-    }
-}
-
-/**
- * @brief Creates a new packet buffer and fills it with audio data.
- * Copies left and right channel audio data into the current buffer, assigns sequence number,
- * marks buffer as ready to send, and advances to next buffer position.
- * Detects and logs buffer overflows if buffer is still waiting to be sent.
- *
- * @param left_or_first_data - Pointer to left channel (or first channel in mono) audio samples
- * @param right_or_second_data - Pointer to right channel (or second channel in stereo) audio samples
- * @param is_stereo - true for stereo packet (sets CONTROL_BITS__STEREO), false for mono
- * @return true on success, false on failure
- */
-bool radio_transmit__create_new_packet_buffer(uint8_t *left_or_first_data, uint8_t *right_or_second_data, bool is_stereo)
-{
-    if ((radio_tx_packet_buffer[packet_buffer_head].waiting_to_be_sent == true) && (radio_tx_packet_buffer[packet_buffer_head].send_attempted == false))
-    {
-        // OVERFLOW
-        radio__printf(true, "OVERFLOW\n");
-        assert(0);
-        // debug__increment_packet_buffer_overflows();
-    }
-
-    if ((radio_tx_packet_buffer[packet_buffer_head].send_attempted == true) && (radio_tx_packet_buffer[packet_buffer_head].tx_processed == false))
-    {
-        // Post-TX Processing not done
-        radio__printf(true, "Post-TX Processing Not Done\n");
-        assert(0);
-    }
-
-    if (radio_tx_packet_buffer[packet_buffer_head].used == true)
-    {
-        memset(&(radio_tx_packet_buffer[packet_buffer_head]), 0, sizeof(packet_buffer_t));
-    }
-    // uint32_t return_index = packet_buffer_head;
-    uint16_t sequence_number = radio__get_sequence_number();
-    radio_tx_packet_buffer[packet_buffer_head].payload.header.sequence_number = sequence_number;
-
-    memcpy(radio_tx_packet_buffer[packet_buffer_head].payload.data_left, left_or_first_data, RADIO_PACKET_DATA_SIZE_PER_CHANNEL);
-    memcpy(radio_tx_packet_buffer[packet_buffer_head].payload.data_right, right_or_second_data, RADIO_PACKET_DATA_SIZE_PER_CHANNEL);
-
-    if (is_stereo)
-    {
-        radio_tx_packet_buffer[packet_buffer_head].payload.header.control_bits = CONTROL_BITS__STEREO;
-    }
-
-    // printf_to_buf_append_time(0,"Filled Buffer at Index : %u\n", packet_buffer_head);
-
-    radio_tx_packet_buffer[packet_buffer_head].micros_timestamp_added_to_buffer = scheduler__get_microsecond_ticks();
-    radio_tx_packet_buffer[packet_buffer_head].used = true;
-    radio_tx_packet_buffer[packet_buffer_head].waiting_to_be_sent = true;
-    radio__increment_sequence_number();
-    radio_transmit__advance_buffer_head();
-    return true;
-}
-
-/**
- * @brief Marks a transmitted packet as successfully sent by clearing the waiting flag.
- * Called after RAIL_EVENT_TX_PACKET_SENT to indicate the packet is no longer needed.
- *
- * @param index_sent - Index of the packet buffer that was successfully sent
- * @return void
- */
-static void radio_transmit__mark_packet_as_successfully_sent(uint32_t index_sent)
-{
-    if (index_sent < NUMBER_OF_PACKET_BUFFERS)
-    {
-        // printf_to_buf_append_time(0,"Marking buffer: %u as sent\n", index_sent);
-        if (radio_tx_packet_buffer[index_sent].send_attempted == true)
-        {
-            radio_tx_packet_buffer[index_sent].waiting_to_be_sent = false;
-            radio_tx_packet_buffer[index_sent].send_successful = true;
-            radio_tx_packet_buffer[index_sent].micros_timestamp_packet_sent = scheduler__get_microsecond_ticks();
-        }
-    }
-}
-
-/**
- * @brief Scans all packet buffers to find the oldest one waiting to be sent.
- * Used to implement FIFO transmission order based on packet creation timestamp.
- * Returns 0xFFFFFFFF if no packet is ready to send.
- *
- * @param None
- * @return Index of the oldest waiting packet, or 0xFFFFFFFF if none available
- */
-uint32_t radio_transmit__get_oldest_packet_ready_to_send(void)
-{
-    uint32_t oldest_timestamp = 0xFFFFFFFF;
-    uint32_t oldest_timestamp_index = 0xFFFFFFFF;
-    for (uint32_t i = 0; i < NUMBER_OF_PACKET_BUFFERS; i++)
-    {
-        if ((radio_tx_packet_buffer[i].waiting_to_be_sent == true) && (radio_tx_packet_buffer[i].send_attempted == false))
-        {
-            if (radio_tx_packet_buffer[i].micros_timestamp_added_to_buffer < oldest_timestamp)
-            {
-                oldest_timestamp_index = i;
-                oldest_timestamp = radio_tx_packet_buffer[i].micros_timestamp_added_to_buffer;
-            }
-        }
-    }
-    return oldest_timestamp_index;
+    (void)packet_buffer_index;
 }
 
 /**
@@ -346,6 +226,11 @@ static bool radio_transmit__send_packet(uint32_t buffer_index, bool retry)
         assert(0);
         return false;
     }
+
+    if (radio_packet_buffers__mark_packet_buffer_send_attempted(buffer_index) == false)
+    {
+        return false;
+    }
     // printf_to_buf_append_time(0,"Loaded to Buffer Successfully\n");
 
     CORE_DECLARE_IRQ_STATE;
@@ -360,9 +245,9 @@ static bool radio_transmit__send_packet(uint32_t buffer_index, bool retry)
     RAIL_Status_t RAIL_StartTx_return = RAIL_StartTx(rail_handle, radio__get_channel(), RAIL_TX_OPTIONS_DEFAULT, NULL);
     if (RAIL_StartTx_return == SL_STATUS_OK)
     {
-        radio_tx_packet_buffer[buffer_index].send_attempted = true;
         tx_packet_in_flight_info.packet_buffer_index = buffer_index;
         tx_packet_in_flight_info.retry = retry;
+        tx_packet_in_flight_info.in_flight = true;
         // radio_transmit__mark_packet_as_successfully_sent(buffer_index);
         if (retry)
         {
@@ -379,6 +264,7 @@ static bool radio_transmit__send_packet(uint32_t buffer_index, bool retry)
     else
     {
         radio_transmit__increment_counter(number_of_TX_attempt_failed);
+        radio_packet_buffers__mark_packet_buffer_failed(buffer_index);
         //      printf_to_buf_append_time(0,"Time: %u - ", (unsigned int)get_millisecond_ticks());
         // printf_to_buf_append_time(0,"Failed to Send buffer %u , sequence : %u, status: 0x%X\n", (unsigned int)buffer_index, radio_tx_packet_buffer[buffer_index].payload.header.sequence_number, (unsigned int)RAIL_StartTx_return);
         CORE_EXIT_CRITICAL();
@@ -400,11 +286,7 @@ static bool radio_transmit__send_packet(uint32_t buffer_index, bool retry)
  */
 bool radio__try_to_send_a_packet_by_index(uint32_t index_to_send)
 {
-    bool return_status = radio_transmit__send_packet(index_to_send, false);
-    // radio_tx_packet_buffer[index_to_send].sent = true;
-    // radio_transmit__mark_packet_as_successfully_sent(index_to_send);
-    // counters__increment_counter(number_of_TX_attempt_success);
-    return return_status;
+    return radio_transmit__send_packet(index_to_send, false);
 }
 
 bool radio__send_packet_by_sequence_number(uint16_t sequence_number, bool retry)
@@ -419,28 +301,6 @@ bool radio__send_packet_by_sequence_number(uint16_t sequence_number, bool retry)
 
     radio__printf(true, "Sequence Number Not Found: %u\n", (unsigned int)sequence_number);
     return false;
-}
-
-static void radio_transmit__packet_post_tx_process(uint32_t index_sent)
-{
-    radio_statistics__note_successful_tx(radio_tx_packet_buffer[index_sent].payload.header.sequence_number, radio_tx_packet_buffer[index_sent].micros_timestamp_packet_sent);
-}
-
-static void radio_transmit__check_if_a_packet_has_been_sent_and_process(void)
-{
-    for (uint32_t i = 0; i < NUMBER_OF_PACKET_BUFFERS; i++)
-    {
-        if (radio_tx_packet_buffer[i].send_successful == true)
-        {
-            if (radio_tx_packet_buffer[i].tx_processed == false)
-            {
-                // Process Post TX
-                // printf_to_buf_append_time(0,"Processing Post TX for Buffer Index: %u, Sequence : %u\n", (unsigned int)i, (unsigned int)radio_tx_packet_buffer[i].payload.header.sequence_number);
-                radio_transmit__packet_post_tx_process(i);
-                radio_tx_packet_buffer[i].tx_processed = true;
-            }
-        }
-    }
 }
 
 /**
@@ -458,19 +318,23 @@ bool radio_transmit__run_process(void)
     //     return true;
     // }
 
-    radio_transmit__check_if_a_packet_has_been_sent_and_process();
-
-    if (!radio__is_radio_busy())
+    if (radio__is_radio_busy())
     {
-        uint32_t index_to_send = radio_transmit__get_oldest_packet_ready_to_send();
-        if (index_to_send < NUMBER_OF_PACKET_BUFFERS)
-        {
-            if (radio__try_to_send_a_packet_by_index(index_to_send))
-            {
-                // printf_to_buf_append_time(0,"Sending Packet : %u\n", index_to_send);
+        return false;
+    }
 
-                return true;
-            }
+    packet_buffer_t *packet_buffer = NULL;
+    uint32_t packet_buffer_index = 0xFFFFFFFF;
+
+    radio_packet_buffers__get_oldest_packet_to_send(&packet_buffer, &packet_buffer_index);
+
+    if (packet_buffer != NULL)
+    {
+        if (radio__try_to_send_a_packet_by_index(packet_buffer_index))
+        {
+            // printf_to_buf_append_time(0,"Sending Packet : %u\n", packet_buffer_index);
+
+            return true;
         }
     }
 
@@ -632,7 +496,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
         // uint32_t bytes_remaining = FIFO_Size - RAIL_GetTxFifoSpaceAvailable(rail_handle);
         //  printf_to_buf_append_time(0,"Fifo Size: %u , Available : %u , Bytes Remaining: %u , Bytes Sent %u\n",(unsigned int)FIFO_Size,(unsigned int)RAIL_GetTxFifoSpaceAvailable(rail_handle), (unsigned int)bytes_remaining, (unsigned int)(RADIO_PAYLOAD_SIZE - bytes_remaining));
 
-        radio_transmit__mark_packet_as_successfully_sent(tx_packet_in_flight_info.packet_buffer_index);
+        radio_transmit__handle_successful_packet_sent(tx_packet_in_flight_info.packet_buffer_index);
 
         if (retry)
         {
@@ -652,6 +516,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
         if (events & RAIL_EVENTS_TX_COMPLETION)
         {
             tx_packet_in_flight_info.in_flight = false;
+            radio_packet_buffers__mark_packet_buffer_failed(tx_packet_in_flight_info.packet_buffer_index);
             // debug__log_TX_fail(tx_packet_in_flight_info.retry);
             if (retry)
             {

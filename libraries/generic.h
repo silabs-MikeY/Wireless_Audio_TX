@@ -69,6 +69,8 @@ typedef enum
 
   //add new registers here
 
+  BURAM_MAGIC,
+
   NUMBER_OF_BURTC_REGISTERS_USED // Don't touch this
 } BURTC_register_map_t;
 
@@ -76,6 +78,7 @@ _Static_assert(NUMBER_OF_BURTC_REGISTERS_USED < NUMBER_OF_BURAM_REGISTERS_AVAILA
 
 
 void process_device_reset(void);
+void generic__printf(bool add_timestamp, const char *format, ...);
 
 void memcpy_from_volatile(uint8_t* destination, volatile uint8_t* source, uint32_t count);
 void memcpy_to_volatile(volatile uint8_t* destination, uint8_t* source, uint32_t count);

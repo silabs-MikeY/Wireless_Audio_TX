@@ -1,11 +1,32 @@
 #include <assert.h>
+#include <stdarg.h>
 
 #include "generic.h"
 #include "print.h"
+#include "print_interfacing.h"
+
+__attribute__((weak)) void generic__printf(bool add_timestamp, const char *format, ...)
+{
+  (void)add_timestamp;
+  (void)format;
+}
 
 //MEMCPY not volatile safe
 
 static BURAM_contents_t BURAM_contents[NUMBER_OF_BURTC_REGISTERS_USED];
+static const uint32_t BURAM_MAGIC_VALUE = 0x4255524Du;
+
+static void generic__initialize_buram_contents(void)
+{
+  for (uint32_t i = 0; i < NUMBER_OF_BURTC_REGISTERS_USED; i++)
+  {
+    BURAM_contents[i].contents = 0;
+    BURAM_contents[i].canary_before = CANARY_BEFORE;
+    BURAM_contents[i].canary_after = CANARY_AFTER;
+  }
+
+  BURAM_contents[BURAM_MAGIC].contents = BURAM_MAGIC_VALUE;
+}
 
 /**
  * @brief Determines the reason for the last device reset.
@@ -110,34 +131,30 @@ void process_device_reset(void)
   //  TRACE_COUNTER();
 
 
-  debug__printf_to_buf_append_time(0,"Reset, Checking Casuse \n");
+  generic__printf(0, "Reset, Checking Casuse \n");
 
   reset_causes_xg24_t reset_cause = get_reset_cause();
 
   CMU_ClockEnable(cmuClock_BURAM, true);
 
-  debug__printf_to_buf_append_time(0,"Reset Cause : %s\n",NUMBER_OF_RMU_CAUSE_TYPES_NAMES[reset_cause]);
+  generic__printf(0, "Reset Cause : %s\n", NUMBER_OF_RMU_CAUSE_TYPES_NAMES[reset_cause]);
+
+  bool buram_is_valid = (BURAM->RET[BURAM_MAGIC].REG == BURAM_MAGIC_VALUE);
 
   if ((reset_cause == POR) ||
       (reset_cause == DVDDBOD) ||
       (reset_cause == DVDDLEBOD) ||
       (reset_cause == DECBOD) ||
       (reset_cause == AVDDBOD) ||
-      (reset_cause == IOVDD0BOD))
+      (reset_cause == IOVDD0BOD) ||
+      (buram_is_valid == false))
     {
-      debug__printf_to_buf_append_time(0,"Initializing BURAM:\n");
-      for (uint32_t i=0 ; i<NUMBER_OF_BURTC_REGISTERS_USED ; i++)
-        {
-          BURAM_contents[i].contents = 0;
-          BURAM_contents[i].canary_before = CANARY_BEFORE;
-          BURAM_contents[i].canary_after = CANARY_AFTER;
-        }
-
-      //memset(BURAM_contents,0,NUMBER_OF_BURTC_REGISTERS_USED * 4);
+      generic__printf(0, "Initializing BURAM:\n");
+      generic__initialize_buram_contents();
     }
   else
     {
-      debug__printf_to_buf_append_time(0,"Fetching BURAM:\n");
+      generic__printf(0, "Fetching BURAM:\n");
       for (uint32_t i=0 ; i<NUMBER_OF_BURTC_REGISTERS_USED ; i++)
         {
           BURAM_contents[i].contents = BURAM->RET[i].REG;
@@ -150,10 +167,10 @@ void process_device_reset(void)
 
   BURAM_contents[reset_cause].contents++;
 
-  debug__printf_to_buf_append_time(0,"Reset Counters:\n");
+  generic__printf(0, "Reset Counters:\n");
   for (uint32_t i=0 ; i<NUMBER_OF_RMU_CAUSE_TYPES ; i++)
     {
-      debug__printf_to_buf_append_time(0,"- %s : %u\n", NUMBER_OF_RMU_CAUSE_TYPES_NAMES[i], (unsigned int)BURAM_contents[i].contents);
+      generic__printf(0, "- %s : %u\n", NUMBER_OF_RMU_CAUSE_TYPES_NAMES[i], (unsigned int)BURAM_contents[i].contents);
     }
 
   switch(reset_cause)

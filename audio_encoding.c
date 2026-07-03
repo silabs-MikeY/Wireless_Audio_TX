@@ -2,7 +2,7 @@
 
 #include "adc.h"
 #include "adpcm.h"
-#include "audio_buffers.h"
+// #include "audio_buffers.h"
 #include "audio_ring_buffer.h"
 #include "radio/radio_transmit.h"
 
@@ -92,16 +92,27 @@ bool audio_encoding__convert_raw_audio_to_pcm16(const uint8_t *input,
                                                        int16_t *output,
                                                        uint32_t input_size)
 {
-  if ((input_size & 0x3) != 0)
+  if ((input == NULL) || (output == NULL))
+  {
+    return false;
+  }
+
+  if ((input_size & 0x1) != 0)
   {
     return false;
   }
 
   const uint32_t sample_size_bytes = adc__get_sample_size_bytes();
 
-  if (sample_size_bytes != 4)
+  if ((sample_size_bytes != 2) && (sample_size_bytes != 4))
   {
     return false;
+  }
+
+  if (sample_size_bytes == 2)
+  {
+    memcpy(output, input, input_size);
+    return true;
   }
 
   uint32_t output_index = 0;
@@ -178,13 +189,6 @@ void audio_encoding__init(void)
 
 void audio_encoding__test_adpcm_left(uint8_t *buffer)
 {
-  int16_t pcm16_buffer[RADIO_PACKET_DATA_SIZE_PER_CHANNEL / sizeof(int16_t)];
-
-  if (audio_encoding__convert_raw_audio_to_pcm16(buffer,
-                                                 pcm16_buffer,
-                                                 RADIO_PACKET_DATA_SIZE) == true) {
-    audio_buffers__add_new_data_to_left_buffer((uint8_t *)pcm16_buffer);
-  }
   ring_buffer__copy_data_into_ring_buffer(buffer, false, RADIO_PACKET_DATA_SIZE);
 
   ADPCM_encode_s32(&left_ctx, (int32_t *)buffer, left_adpcm, N_FRAMES,
@@ -195,13 +199,6 @@ void audio_encoding__test_adpcm_left(uint8_t *buffer)
 
 void audio_encoding__test_adpcm_right(uint8_t *buffer)
 {
-  int16_t pcm16_buffer[RADIO_PACKET_DATA_SIZE_PER_CHANNEL / sizeof(int16_t)];
-
-  if (audio_encoding__convert_raw_audio_to_pcm16(buffer,
-                                                 pcm16_buffer,
-                                                 RADIO_PACKET_DATA_SIZE) == true) {
-    audio_buffers__add_new_data_to_right_buffer((uint8_t *)pcm16_buffer);
-  }
   ring_buffer__copy_data_into_ring_buffer(buffer, true, RADIO_PACKET_DATA_SIZE);
 
   ADPCM_encode_s32(&right_ctx, (int32_t *)buffer, right_adpcm, N_FRAMES,
