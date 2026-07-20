@@ -1,18 +1,35 @@
 #include "radio_base.h"
-
-static void radio__start_radio_rx_prs(void);
+#include "rail.h"
+#include "sl_rail_util_init.h"
+#include "radio_statistics.h"
+#include "radio_transmit.h"
+#include "radio_receive.h"
 
 volatile uint32_t next_sequence_number = 0;
 uint32_t channel = 10;
 bool channel_changed_flag = false;
 bool searching_for_channel_flag = false;
 volatile bool request_channel_increment_flag = false;
+static volatile bool radio_calibration_pending = false;
+static RAIL_CalValues_t radio_calibration_values = RAIL_CALVALUES_UNINIT;
+
+#define ENABLE_PRS 0
+
+#if (ENABLE_PRS == 1)
+static void radio__start_radio_rx_prs(void)
+#endif
+
+static bool radio__run_pending_calibration(void);
 
 __attribute__((weak)) void radio__printf(bool add_timestamp, const char *format, ...)
 {
   (void)add_timestamp;
   (void)format;
 }
+
+// -----------------------------------------------------------------------------
+//                     Sequence Number
+// -----------------------------------------------------------------------------
 
 /**
  * @brief Gets the current TX sequence number.
@@ -21,7 +38,7 @@ __attribute__((weak)) void radio__printf(bool add_timestamp, const char *format,
  * @param None
  * @return Current sequence number (0-65535 range)
  */
-uint32_t radio__get_sequence_number(void)
+uint32_t radio__get_next_sequence_number(void)
 {
   return next_sequence_number;
 }
@@ -45,8 +62,6 @@ void radio__increment_sequence_number(void)
     next_sequence_number++;
   }
 
-  // counters__set_counter(sequence_number_at_end, next_sequence_number);
-
 #if (DEBUG_TEST_MISSING_SEQUENCE_NUMBER == 1)
   if (next_sequence_number == 1000)
   {
@@ -55,7 +70,13 @@ void radio__increment_sequence_number(void)
 #endif
 }
 
+// -----------------------------------------------------------------------------
+//                     Sequence Number End
+// -----------------------------------------------------------------------------
 
+// -----------------------------------------------------------------------------
+//                     Channel Management
+// -----------------------------------------------------------------------------
 
 /**
  * @brief Increments the RF channel (hopping pattern).
@@ -114,21 +135,18 @@ bool radio__get_channel_changed_flag(void)
  * @param None
  * @return void
  */
-void radio__reset_channel_chanegd_flag(void)
+void radio__reset_channel_changed_flag(void)
 {
   channel_changed_flag = false;
 }
 
-/**
- * @brief De-initializes radio subsystem (placeholder).
- * Currently empty but reserved for cleanup operations.
- *
- * @param None
- * @return void
- */
-void radio__deinit(void)
-{
-}
+// -----------------------------------------------------------------------------
+//                     Channel Management End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Radio General
+// -----------------------------------------------------------------------------
 
 /**
  * @brief Initializes the complete radio subsystem.
@@ -144,65 +162,23 @@ void radio__init(void)
   RAIL_Handle_t *rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_INST);
 
   RAIL_ConfigEvents(rail_handle, RAIL_EVENTS_ALL, RAIL_EVENTS_ALL);
-
+  #if (ENABLE_PRS == 1)
   radio__start_radio_rx_prs();
+  #endif
   radio_statistics__init();
   radio_transmit__init();
   radio_receive__init();
+}
 
-  // uint16_t RAIL_TXFIFO_LENGTH_SIZE = RAIL_SetFixedLength(rail_handle, RADIO_PAYLOAD_SIZE);
-  // if (RAIL_TXFIFO_LENGTH_SIZE != RADIO_PAYLOAD_SIZE)
-  // {
-  //   assert(0);
-  // }
-
-  //   uint32_t RAIL_SetTxFifo_return = RAIL_SetTxFifo(rail_handle, (uint8_t *)tx_buffer, 0, RADIO_FIFO_SIZE);
-  //   if (RAIL_SetTxFifo_return < RADIO_PAYLOAD_SIZE)
-  //   {
-  //     printf("RAIL_SetTxFifo Failed. Requested : %u Bytes, Got %u Bytes \n", (unsigned int)RADIO_FIFO_SIZE, (unsigned int)RAIL_SetTxFifo_return);
-  //     assert(0);
-  //   }
-  //   printf("RAIL_SetTxFifo Success, %u Bytes\n", (unsigned int)RAIL_SetTxFifo_return);
-  //   FIFO_Size = RAIL_SetTxFifo_return;
-
-  //   RAIL_Status_t RAIL_SetTxPowerDbm_return = RAIL_SetTxPowerDbm(rail_handle, 190);
-  //   if (RAIL_SetTxPowerDbm_return != RAIL_STATUS_NO_ERROR)
-  //   {
-  //     printf("RAIL_SetTxPowerDbm failed, Status Code: %X\n", (unsigned int)RAIL_SetTxPowerDbm_return);
-  //     assert(0);
-  //   }
-  //   printf("RAIL_SetTxPowerDbm Success\n");
-
-  //   RAIL_Status_t RAIL_SetRxFifo_return = RAIL_SetRxFifo(rail_handle, (uint8_t *)RX_FIFO, &RX_FIFO_SIZE);
-  //   if (RAIL_SetRxFifo_return != RAIL_STATUS_NO_ERROR)
-  //   {
-  //     printf("RAIL_SetRxFifo failed, Status Code: %X\n", (unsigned int)RAIL_SetRxFifo_return);
-  //     assert(0);
-  //   }
-  //   if (RX_FIFO_SIZE != RADIO_FIFO_SIZE)
-  //   {
-  //     printf("RAIL_SetRxFifo Failed. Requested : %u Bytes, Got %u Bytes \n", (unsigned int)RADIO_FIFO_SIZE, (unsigned int)RX_FIFO_SIZE);
-  //     assert(0);
-  //   }
-  //   printf("RAIL_SetRxFifo Success, %u Bytes\n", (unsigned int)RX_FIFO_SIZE);
-
-  // #define ENABLE_PRS 0
-  // #if (ENABLE_PRS == 1)
-
-  // #define PRS_SOURCE PRS_ASYNC_CH_CTRL_SOURCESEL_RACL
-  // #define PRS_SIGNAL PRS_ASYNC_CH_CTRL_SIGSEL_RACLTX
-
-  //   CMU_ClockEnable(cmuClock_PRS, true);
-  //   CMU_ClockEnable(cmuClock_GPIO, true);
-  //   GPIO_PinOutSet(gpioPortB, 1);
-  //   PRS_SourceAsyncSignalSet(1,
-  //                            PRS_SOURCE,
-  //                            PRS_SIGNAL);
-  //   PRS_PinOutput(1,
-  //                 prsTypeAsync,
-  //                 gpioPortB,
-  //                 1);
-  // #endif
+/**
+ * @brief De-initializes radio subsystem (placeholder).
+ * Currently empty but reserved for cleanup operations.
+ *
+ * @param None
+ * @return void
+ */
+void radio__deinit(void)
+{
 }
 
 /**
@@ -212,9 +188,9 @@ void radio__init(void)
  * @param None
  * @return void
  */
-static void radio__start_radio_rx_prs(void)
-{
 #if (ENABLE_PRS == 1)
+ static void radio__start_radio_rx_prs(void)
+{
 
 #define PRS_SOURCE PRS_ASYNC_CH_CTRL_SOURCESEL_RACL
 #define PRS_SIGNAL PRS_ASYNC_CH_CTRL_SIGSEL_RACLTX
@@ -229,8 +205,8 @@ static void radio__start_radio_rx_prs(void)
                 prsTypeAsync,
                 gpioPortB,
                 1);
-#endif
 }
+#endif
 
 /**
  * @brief Routes RAIL events to appropriate TX/RX handlers.
@@ -244,10 +220,14 @@ static void radio__start_radio_rx_prs(void)
 void radio__process_event(RAIL_Handle_t rail_handle, RAIL_Events_t events)
 {
   (void)rail_handle;
-  (void)events;
+
+  if ((events & RAIL_EVENT_CAL_NEEDED) != 0)
+  {
+    radio_calibration_pending = true;
+  }
 
   radio__process_event_tx(rail_handle, events);
-  radio__process_event_rx(rail_handle, events);
+  // radio__process_event_rx(rail_handle, events);
 
   // logged_events[logged_events_count++] = events;
 }
@@ -263,15 +243,45 @@ void radio__run_process(void)
 {
 
   radio_transmit__run_process();
+  
   if (radio__is_radio_busy() == false)
   {
+    CORE_DECLARE_IRQ_STATE;
+    CORE_ENTER_CRITICAL();
     radio__check_if_update_channel_needed_and_update();
+    radio__run_pending_calibration();
+    CORE_EXIT_CRITICAL();
   }
-  // if (radio_retry__run_process())
-  // {
-  //   //return;
-  // }
-  // radio_retry__run_process();
+}
+
+static bool radio__run_pending_calibration(void)
+{
+  bool run_calibration = false;
+
+  if (radio_calibration_pending)
+  {
+    radio_calibration_pending = false;
+    run_calibration = true;
+  }
+
+  if (!run_calibration)
+  {
+    return false;
+  }
+
+  RAIL_Handle_t rail_handle =
+      sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_INST);
+  RAIL_Status_t status = RAIL_Calibrate(
+      rail_handle, &radio_calibration_values, RAIL_CAL_ALL_PENDING);
+
+  if (status != RAIL_STATUS_NO_ERROR)
+  {
+    // RAIL can reject calibration during a transient protocol/radio state.
+    // Keep the request pending and retry it from a later main-loop pass.
+    radio_calibration_pending = true;
+  }
+
+  return true;
 }
 
 /**
@@ -293,3 +303,7 @@ bool radio__is_radio_busy(void)
   }
   return true;
 }
+
+// -----------------------------------------------------------------------------
+//                     Radio General End
+// -----------------------------------------------------------------------------

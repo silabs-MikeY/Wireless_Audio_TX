@@ -21,19 +21,18 @@ static const char *STATE_NAMES[] __attribute__ ((used)) = {
     "ERROR",
 };
 
-states_t state_machine__get_state(void);
+void state_machine__printf(bool add_timestamp, const char *format, ...);
 
-void state_machine__run_state_machine(void);
-//void processStateNode(void);
-bool state_machine__process_state_init(void);
-bool state_machine__process_state_idle(void);
-bool state_machine__process_state_error(void);
-bool state_machine__process_state_running(void);
+states_t state_machine__get_state(void);
+void state_machine__set_next_state(states_t new_state);
+
+bool state_machine__run_state_machine(void);
+
+bool state_machine__process_state_init(states_t last_state);
+bool state_machine__process_state_error(states_t last_state);
+bool state_machine__process_state_running(states_t last_state);
 
 void state_machine__force_state_machine_error(void);
-
-bool state_machine__init_peripherals(void);
-bool state_machine__de_init_peripherals(void);
 
 void state_machine__set_first_packet_received_flag(void);
 

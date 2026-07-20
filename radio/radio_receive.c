@@ -1,10 +1,9 @@
 #include "radio_receive.h"
-
 #include "radio_base.h"
 #include "radio_packet_format.h"
 #include "radio_retry.h"
-#include "print.h"
-
+#include "rail.h"
+#include "sl_rail_util_init.h"
 #include <assert.h>
 
 void radio__process_receiver_packet(RAIL_Handle_t rail_handle, RAIL_Events_t events);
@@ -101,24 +100,46 @@ bool radio__process_event_rx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
  */
 void radio__process_receiver_packet(RAIL_Handle_t rail_handle, RAIL_Events_t events)
 {
-    (void)rail_handle;
     (void)events;
 
     RAIL_RxPacketHandle_t rx_packet_handle;
     RAIL_RxPacketInfo_t packet_info;
     //  uint8_t *start_of_packet = 0;
 
-    rx_packet_handle = RAIL_GetRxPacketInfo(rail_handle, RAIL_RX_PACKET_HANDLE_OLDEST_COMPLETE, &packet_info);
-    (void)rx_packet_handle;
+    rx_packet_handle = RAIL_GetRxPacketInfo(
+        rail_handle, RAIL_RX_PACKET_HANDLE_OLDEST_COMPLETE, &packet_info);
+    if (rx_packet_handle == RAIL_RX_PACKET_HANDLE_INVALID)
+    {
+        return;
+    }
 
-    payload_t temp;
+    if ((packet_info.packetStatus != RAIL_RX_PACKET_READY_SUCCESS) ||
+        (packet_info.packetBytes < RADIO_PACKET_HEADER_SIZE) ||
+        (packet_info.packetBytes > sizeof(payload_t)))
+    {
+        (void)RAIL_ReleaseRxPacket(rail_handle, rx_packet_handle);
+        return;
+    }
 
+    payload_t temp = {0};
     RAIL_CopyRxPacket((uint8_t *)&temp, &packet_info);
 
-    if (temp.header.size > RADIO_PACKET_DATA_SIZE_PER_CHANNEL)
+    if ((temp.header.control_bits & CONTROL_BITS__COMMAND_PACKET) == 0)
     {
-        radio__printf(true, "RX request size too large: %u\n", (unsigned int)temp.header.size);
-        (void) RAIL_ReleaseRxPacket(rail_handle, rx_packet_handle);
+        (void)RAIL_ReleaseRxPacket(rail_handle, rx_packet_handle);
+        return;
+    }
+
+    const uint32_t request_data_size = (uint32_t)temp.header.size + 1u;
+    const uint32_t received_data_size =
+        (uint32_t)packet_info.packetBytes - RADIO_PACKET_HEADER_SIZE;
+
+    if ((request_data_size == 0) ||
+        ((request_data_size & 0x1u) != 0) ||
+        (request_data_size > RADIO_PACKET_DATA_SIZE_PER_CHANNEL) ||
+        (request_data_size > received_data_size))
+    {
+        (void)RAIL_ReleaseRxPacket(rail_handle, rx_packet_handle);
         return;
     }
 
@@ -127,7 +148,7 @@ void radio__process_receiver_packet(RAIL_Handle_t rail_handle, RAIL_Events_t eve
     // {
     //   debug__audio_buffer_printf_to_buf_append_time(0,"0x%X, ", (unsigned int)((uint8_t *)(&temp))[i]);
     // }
-    uint32_t number_of_missing_packets_requested = (temp.header.size + 1) >> 1;
+    uint32_t number_of_missing_packets_requested = request_data_size >> 1;
 
     // debug__audio_buffer_printf_to_buf_append_time(0,"\nNumber Sequence Numbers Requested : %u\n", number_of_missing_packets_requested);
     for (uint32_t i = 0; i < number_of_missing_packets_requested; i++)
@@ -137,5 +158,5 @@ void radio__process_receiver_packet(RAIL_Handle_t rail_handle, RAIL_Events_t eve
         radio__printf(true, "%u - Got Request For Sequence Number : %u\n", i, missing_sequence_number);
     }
 
-    (void) RAIL_ReleaseRxPacket(rail_handle, rx_packet_handle);
+    (void)RAIL_ReleaseRxPacket(rail_handle, rx_packet_handle);
 }

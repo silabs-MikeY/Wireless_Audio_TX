@@ -6,6 +6,8 @@
 #include <assert.h>
 #include <string.h>
 
+#define RADIO_PACKET_RETRY_DELAY_MICROS 2000u
+
 bool radio__try_to_send_a_packet_by_index(uint32_t index_to_send);
 
 packet_buffer_t radio_tx_packet_buffer[NUMBER_OF_PACKET_BUFFERS];
@@ -35,11 +37,16 @@ const packet_buffer_t *radio_packet_buffers__get_packet_buffer(uint32_t packet_b
 
 void radio_packet_buffers__get_oldest_packet_to_send(packet_buffer_t **packet_buffer, uint32_t *packet_buffer_index)
 {
+  uint32_t current_time = scheduler__get_microsecond_ticks();
   uint32_t oldest_timestamp = 0xFFFFFFFF;
   uint32_t oldest_timestamp_index = 0xFFFFFFFF;
   for (uint32_t i = 0; i < NUMBER_OF_PACKET_BUFFERS; i++)
   {
-    if ((radio_tx_packet_buffer[i].waiting_to_be_sent == true) && (radio_tx_packet_buffer[i].send_attempted == false))
+    bool retry_ready = (radio_tx_packet_buffer[i].micros_timestamp_retry_after == 0) ||
+                       (current_time >= radio_tx_packet_buffer[i].micros_timestamp_retry_after);
+
+    if ((radio_tx_packet_buffer[i].waiting_to_be_sent == true) &&
+        ((radio_tx_packet_buffer[i].send_attempted == false) || retry_ready))
     {
       if (radio_tx_packet_buffer[i].micros_timestamp_added_to_buffer < oldest_timestamp)
       {
@@ -108,13 +115,14 @@ bool radio_packet_buffers__mark_packet_buffer_used(uint32_t packet_buffer_index)
     return false;
   }
 
-  radio_tx_packet_buffer[packet_buffer_index].payload.header.sequence_number = radio__get_sequence_number();
+  radio_tx_packet_buffer[packet_buffer_index].payload.header.sequence_number = radio__get_next_sequence_number();
   radio__increment_sequence_number();
 
   radio_tx_packet_buffer[packet_buffer_index].micros_timestamp_added_to_buffer = scheduler__get_microsecond_ticks();
   radio_tx_packet_buffer[packet_buffer_index].used = true;
   radio_tx_packet_buffer[packet_buffer_index].waiting_to_be_sent = true;
   radio_tx_packet_buffer[packet_buffer_index].send_attempted = false;
+  radio_tx_packet_buffer[packet_buffer_index].micros_timestamp_retry_after = 0;
   radio_tx_packet_buffer[packet_buffer_index].tx_processed = false;
 
   return true;
@@ -134,6 +142,7 @@ bool radio_packet_buffers__mark_packet_buffer_send_attempted(uint32_t packet_buf
 
   radio_tx_packet_buffer[packet_buffer_index].waiting_to_be_sent = false;
   radio_tx_packet_buffer[packet_buffer_index].send_attempted = true;
+  radio_tx_packet_buffer[packet_buffer_index].micros_timestamp_retry_after = 0;
 
   return true;
 }
@@ -153,6 +162,7 @@ bool radio_packet_buffers__mark_packet_buffer_completed(uint32_t packet_buffer_i
   radio_tx_packet_buffer[packet_buffer_index].tx_processed = true;
   radio_tx_packet_buffer[packet_buffer_index].micros_timestamp_packet_sent = scheduler__get_microsecond_ticks();
   radio_tx_packet_buffer[packet_buffer_index].used = false;
+  radio_tx_packet_buffer[packet_buffer_index].micros_timestamp_retry_after = 0;
 
   return true;
 }
@@ -169,9 +179,10 @@ bool radio_packet_buffers__mark_packet_buffer_failed(uint32_t packet_buffer_inde
     return false;
   }
 
-  radio_tx_packet_buffer[packet_buffer_index].waiting_to_be_sent = false;
-  radio_tx_packet_buffer[packet_buffer_index].tx_processed = true;
-  radio_tx_packet_buffer[packet_buffer_index].used = false;
+  radio_tx_packet_buffer[packet_buffer_index].waiting_to_be_sent = true;
+  radio_tx_packet_buffer[packet_buffer_index].send_attempted = true;
+  radio_tx_packet_buffer[packet_buffer_index].tx_processed = false;
+  radio_tx_packet_buffer[packet_buffer_index].micros_timestamp_retry_after = scheduler__get_microsecond_ticks() + RADIO_PACKET_RETRY_DELAY_MICROS;
 
   return true;
 }

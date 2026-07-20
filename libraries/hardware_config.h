@@ -42,7 +42,7 @@
 #define RGB2_RED_PORT                         gpioPortA
 #define RGB2_RED_PIN                          6
 
-#define RGB2_TIMER                            (TIMER3)
+#define RGB2_TIMER                            (TIMER4)
 // RGB LEDs END
 
 // Scheduler

@@ -13,7 +13,7 @@ void audio_pipeline__reset_counters(void);
 // Counters End
 
 void audio_pipeline__init(bool is_stereo, bool enable_encoder);
-void audio_pipeline__run_process(void);
+bool audio_pipeline__run_process(void);
 bool audio_pipeline__is_stereo(void);
 bool audio_pipeline__is_encoder_enabled(void);
 

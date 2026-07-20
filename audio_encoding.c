@@ -35,69 +35,11 @@ static uint8_t audio_encoding__get_adpcm_input_shift(void)
   return 0;
 }
 
-static int16_t audio_encoding__pcm32_to_pcm16(int32_t sample)
-{
-  uint8_t input_shift = audio_encoding__get_adpcm_input_shift();
-  int32_t shifted_sample;
-  int64_t scaled_sample;
-
-  if (input_shift == 0)
-  {
-    shifted_sample = sample;
-  }
-  else if (input_shift >= 31)
-  {
-    shifted_sample = (sample < 0) ? -1 : 0;
-  }
-  else
-  {
-    int32_t round = (int32_t)1 << (input_shift - 1);
-
-    if (sample >= 0)
-    {
-      shifted_sample = (sample + round) >> input_shift;
-    }
-    else
-    {
-      shifted_sample = -(((-sample) + round) >> input_shift);
-    }
-  }
-
-  scaled_sample = (int64_t)shifted_sample * 32768;
-  if (scaled_sample >= 0)
-  {
-    scaled_sample += 16384;
-  }
-  else
-  {
-    scaled_sample -= 16384;
-  }
-
-  scaled_sample >>= 15;
-
-  if (scaled_sample > 32767)
-  {
-    return 32767;
-  }
-
-  if (scaled_sample < -32768)
-  {
-    return -32768;
-  }
-
-  return (int16_t)scaled_sample;
-}
-
 bool audio_encoding__convert_raw_audio_to_pcm16(const uint8_t *input,
-                                                       int16_t *output,
-                                                       uint32_t input_size)
+                                               int16_t *output,
+                                               uint32_t input_size)
 {
   if ((input == NULL) || (output == NULL))
-  {
-    return false;
-  }
-
-  if ((input_size & 0x1) != 0)
   {
     return false;
   }
@@ -109,20 +51,25 @@ bool audio_encoding__convert_raw_audio_to_pcm16(const uint8_t *input,
     return false;
   }
 
+  if ((input_size % sample_size_bytes) != 0)
+  {
+    return false;
+  }
+
   if (sample_size_bytes == 2)
   {
     memcpy(output, input, input_size);
     return true;
   }
 
+  uint8_t *output_bytes = (uint8_t *)output;
   uint32_t output_index = 0;
+
   for (uint32_t input_index = 0; input_index < input_size; input_index += sample_size_bytes)
   {
-    int32_t raw_sample;
-
-    memcpy(&raw_sample, &input[input_index], sizeof(raw_sample));
-    output[output_index] = audio_encoding__pcm32_to_pcm16(raw_sample);
-    output_index++;
+    output_bytes[output_index + 0] = input[input_index + 1];
+    output_bytes[output_index + 1] = input[input_index + 0];
+    output_index += 2;
   }
 
   return true;

@@ -3,12 +3,15 @@
 // #include "audio_buffers.h"
 #include "counters_new.h"
 #include "ADC.h"
+#include "audio_intensity.h"
 #include "app_process.h"
 #include "radio_transmit.h"
 #include "microseconds.h"
 #include "scheduler.h"
 #include "audio_pipeline.h"
 #include "audio_ring_buffer.h"
+#include "radio_statistics.h"
+#include "tx_retry.h"
 
 typedef struct counter_provider_s {
   uint32_t (*get_number_of_counters)(void);
@@ -44,10 +47,13 @@ static const counter_provider_t counter_providers[] = {
   { microseconds__get_number_of_counters, microseconds__get_counter_name, microseconds__get_counter_address },
   { app_process__get_number_of_counters, app_process__get_counter_name, app_process__get_counter_address },
   { adc__get_number_of_counters, adc__get_counter_name, adc__get_counter_address },
+  { audio_intensity__get_number_of_counters, audio_intensity__get_counter_name, audio_intensity__get_counter_address },
   { audio_pipeline__get_number_of_counters, audio_pipeline__get_counter_name, audio_pipeline__get_counter_address },
   // { audio_buffers__get_number_of_counters, audio_pipeline__get_counter_address`, audio_pipeline__get_counter_address },
   { ring_buffer__get_number_of_counters, ring_buffer__get_counter_name, ring_buffer__get_counter_address },
   { radio_transmit__get_number_of_counters, radio_transmit__get_counter_name, radio_transmit__get_counter_address },
+  { radio_statistics__get_number_of_counters, radio_statistics__get_counter_name, radio_statistics__get_counter_address },
+  //{ tx_retry__get_number_of_counters, tx_retry__get_counter_name, tx_retry__get_counter_address },
 };
 
 static const counter_reset_t counter_resets[] = {
@@ -55,9 +61,12 @@ static const counter_reset_t counter_resets[] = {
   { radio_transmit__reset_counters },
   { scheduler__reset_counters },
   { adc__reset_counters },
+  { audio_intensity__reset_counters },
   { audio_pipeline__reset_counters },
   // { audio_buffers__reset_counters },
   { ring_buffer__reset_counters },
+  { radio_statistics__reset_counters },
+  //{ tx_retry__reset_counters },
 };
 
 
@@ -89,10 +98,12 @@ void counters__process_counter_reset(void)
 void counters__pre_save_hook(void)
 {
   microseconds__trigger_counter_update();
+  radio_statistics__prepare_counters_for_print();
 }
 
 void counters__post_print_hook(void)
 {
+  radio_statistics__reset_counters();
   counters__printf(true, "Details:\n");
 }
 

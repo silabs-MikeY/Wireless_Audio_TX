@@ -1,242 +1,272 @@
 #include "radio_statistics.h"
 #include "app_process.h"
-#include "radio_base.h"
-#include "scheduler.h"
 
 #include <string.h>
 
-static bool radio__validate_radio_tx_count(void);
-void radio_statistics__validate_radio_statistics(void);
+__attribute__((weak)) void radio_statistics__printf(bool add_timestamp, const char *format, ...)
+{
+  (void)add_timestamp;
+  (void)format;
+}
+
+static volatile uint32_t radio_statistics_counter_values[RADIO_STATISTICS_NUMBER_OF_COUNTERS] = {0};
+static const char *radio_statistics_counter_names[RADIO_STATISTICS_NUMBER_OF_COUNTERS] = {
+    "number_of_TX_packets_sent_this_second",
+    "max_tx_timestamp_delta",
+    "min_tx_timestamp_delta",
+    "last_tx_timestamp_micros",
+  "sequence_number_window_start",
+  "sequence_number_window_end",
+  "sequence_number_window_difference",
+    "bad_timestamps_count",
+    "moving_average_tx_delta",
+};
 
 const mono_stereo_radio_config_values_t *stereo_or_mono_config = &mono_config;
 volatile transmit_statistics_t transmit_statistics;
-static bool radio_statistics_validate_timing = true;
+static uint64_t tx_delta_accumulator = 0;
+static uint32_t tx_delta_sample_count = 0;
+static uint32_t saved_SEQUENCE_NUMBER_WINDOW_START = 0;
+static uint32_t NUMBER_OF_TX_PACKETS_SENT_THIS_SECOND = 0;
 
-// void radio_statistics__get_tx_statistics(transmit_statistics_t* transmit_statistics_t)
+static void radio_statistics__update_delta_counters(uint32_t tx_delta)
+{
+  if ((transmit_statistics.max_tx_timestamp_delta == 0) || (tx_delta > transmit_statistics.max_tx_timestamp_delta))
+  {
+    transmit_statistics.max_tx_timestamp_delta = tx_delta;
+    radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_MAX_TX_TIMESTAMP_DELTA] = tx_delta;
+  }
+
+  if ((transmit_statistics.min_tx_timestamp_delta == 0) || (tx_delta < transmit_statistics.min_tx_timestamp_delta))
+  {
+    transmit_statistics.min_tx_timestamp_delta = tx_delta;
+    radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_MIN_TX_TIMESTAMP_DELTA] = tx_delta;
+  }
+}
+
+static void radio_statistics__accumulate_tx_delta(uint32_t tx_delta)
+{
+  tx_delta_accumulator += tx_delta;
+  tx_delta_sample_count++;
+}
+
+void radio_statistics__prepare_counters_for_print(void)
+{
+  if (tx_delta_sample_count == 0)
+  {
+    transmit_statistics.moving_average_tx_delta = 0;
+  }
+  else
+  {
+    transmit_statistics.moving_average_tx_delta =
+        (uint32_t)(tx_delta_accumulator / tx_delta_sample_count);
+  }
+
+    radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_SEQUENCE_NUMBER_WINDOW_START] = saved_SEQUENCE_NUMBER_WINDOW_START;
+    radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_SEQUENCE_NUMBER_WINDOW_DIFFERENCE] = radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_SEQUENCE_NUMBER_WINDOW_END] - saved_SEQUENCE_NUMBER_WINDOW_START;
+    saved_SEQUENCE_NUMBER_WINDOW_START = radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_SEQUENCE_NUMBER_WINDOW_END];
+    radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_NUMBER_OF_TX_PACKETS_SENT_THIS_SECOND] = NUMBER_OF_TX_PACKETS_SENT_THIS_SECOND;
+    NUMBER_OF_TX_PACKETS_SENT_THIS_SECOND = 0;
+
+  radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_MOVING_AVERAGE_TX_DELTA] = transmit_statistics.moving_average_tx_delta;
+}
+
+uint32_t radio_statistics__get_number_of_counters(void)
+{
+  return RADIO_STATISTICS_NUMBER_OF_COUNTERS;
+}
+
+const char *radio_statistics__get_counter_name(uint32_t counter_index)
+{
+  if (counter_index >= RADIO_STATISTICS_NUMBER_OF_COUNTERS)
+  {
+    return NULL;
+  }
+
+  return radio_statistics_counter_names[counter_index];
+}
+
+volatile uint32_t *radio_statistics__get_counter_address(uint32_t counter_index)
+{
+  if (counter_index >= RADIO_STATISTICS_NUMBER_OF_COUNTERS)
+  {
+    return NULL;
+  }
+
+  return &radio_statistics_counter_values[counter_index];
+}
+
+void radio_statistics__reset_counters(void)
+{
+  radio_statistics__reset_radio_statistics_for_new_measurement();
+}
+
+// void radio_statistics__get_tx_statistics(transmit_statistics_t*
+// transmit_statistics_t)
 // {
 //     return transmit_statistics;
 // }
 
-void radio_statistics__get_min_and_max_transmit_deltas(uint32_t *delta_min, uint32_t *delta_max)
-{
-    *delta_min = transmit_statistics.min_tx_timestamp_delta;
-    *delta_max = transmit_statistics.max_tx_timestamp_delta;
+void radio_statistics__get_min_and_max_transmit_deltas(uint32_t *delta_min,
+                                                       uint32_t *delta_max) {
+  *delta_min = radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_MIN_TX_TIMESTAMP_DELTA];
+  *delta_max = radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_MAX_TX_TIMESTAMP_DELTA];
 }
 
-void radio_statistics__get_number_of_transmits_processed(uint32_t *number_of_transmits_processed)
-{
-    *number_of_transmits_processed = transmit_statistics.number_of_TX_packets_sent_this_second;
+void radio_statistics__get_number_of_transmits_processed(
+    uint32_t *number_of_transmits_processed) {
+  *number_of_transmits_processed = radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_NUMBER_OF_TX_PACKETS_SENT_THIS_SECOND];
 }
 
-// void radio_statistics__get_bad_timestamps(uint32_t* number_of_transmits_processed)
+// void radio_statistics__get_bad_timestamps(uint32_t*
+// number_of_transmits_processed)
 // {
-//     *number_of_transmits_processed = transmit_statistics.number_of_TX_packets_sent_this_second;
+//     *number_of_transmits_processed =
+//     transmit_statistics.number_of_TX_packets_sent_this_second;
 // }
 
-void radio_statistics__set_audio_mode(bool is_stereo, bool encoder_enabled)
-{
-  uint32_t packet_bytes_per_channel = is_stereo ? RADIO_PACKET_DATA_SIZE_PER_CHANNEL : RADIO_PACKET_DATA_SIZE;
+void radio_statistics__set_audio_mode(bool is_stereo, bool encoder_enabled) {
+  uint32_t packet_bytes_per_channel =
+      is_stereo ? RADIO_PACKET_DATA_SIZE_PER_CHANNEL : RADIO_PACKET_DATA_SIZE;
   uint32_t samples_per_packet = 0;
 
-  radio_statistics_validate_timing = !(is_stereo == false && encoder_enabled == false);
-
-  if (encoder_enabled)
-  {
+  if (encoder_enabled) {
     samples_per_packet = packet_bytes_per_channel * 2;
-  }
-  else
-  {
+  } else {
     samples_per_packet = packet_bytes_per_channel / 2;
   }
 
   static mono_stereo_radio_config_values_t mode_config;
-  mode_config.number_of_tx_per_second_expected = SAMPLE_FREQ / samples_per_packet;
-  mode_config.expected_tx_microsecond_delta = 1000000 / mode_config.number_of_tx_per_second_expected;
-  mode_config.acceptable_tx_microsecond_delta_lower = mode_config.expected_tx_microsecond_delta * (100 - TX_DELTA_DEVIATION_ALLOWANCE_PERCENT) / 100;
-  mode_config.acceptable_tx_microsecond_delta_upper = mode_config.expected_tx_microsecond_delta * (100 + TX_DELTA_DEVIATION_ALLOWANCE_PERCENT) / 100;
+  mode_config.number_of_tx_per_second_expected =
+      SAMPLE_FREQ / samples_per_packet;
+  mode_config.expected_tx_microsecond_delta =
+      1000000 / mode_config.number_of_tx_per_second_expected;
+  mode_config.acceptable_tx_microsecond_delta_lower =
+      mode_config.expected_tx_microsecond_delta *
+      (100 - TX_DELTA_DEVIATION_ALLOWANCE_PERCENT) / 100;
+  mode_config.acceptable_tx_microsecond_delta_upper =
+      mode_config.expected_tx_microsecond_delta *
+      (100 + TX_DELTA_DEVIATION_ALLOWANCE_PERCENT) / 100;
 
   stereo_or_mono_config = &mode_config;
 
-  radio__printf(true, "Set Config to %s%s\n", is_stereo ? "Stereo" : "Mono", encoder_enabled ? " + ADPCM" : "");
-  radio__printf(true, "- Expected TX Count Per Second : %u\n", (unsigned int)stereo_or_mono_config->number_of_tx_per_second_expected);
-  radio__printf(true, "- Expected TX Delta : %u\n", (unsigned int)stereo_or_mono_config->expected_tx_microsecond_delta);
-  radio__printf(true, "- TX Upper Delta Threshold : %u\n", (unsigned int)stereo_or_mono_config->acceptable_tx_microsecond_delta_upper);
-  radio__printf(true, "- TX Lower Delta Threshold : %u\n", (unsigned int)stereo_or_mono_config->acceptable_tx_microsecond_delta_lower);
+    radio_statistics__printf(true, "Set Config to %s%s\n", is_stereo ? "Stereo" : "Mono",
+          encoder_enabled ? " + ADPCM" : "");
+    radio_statistics__printf(
+      true, "- Expected TX Count Per Second : %u\n",
+      (unsigned int)stereo_or_mono_config->number_of_tx_per_second_expected);
+    radio_statistics__printf(
+      true, "- Expected TX Delta : %u\n",
+      (unsigned int)stereo_or_mono_config->expected_tx_microsecond_delta);
+    radio_statistics__printf(true, "- TX Upper Delta Threshold : %u\n",
+                (unsigned int)stereo_or_mono_config
+                    ->acceptable_tx_microsecond_delta_upper);
+    radio_statistics__printf(true, "- TX Lower Delta Threshold : %u\n",
+                (unsigned int)stereo_or_mono_config
+                    ->acceptable_tx_microsecond_delta_lower);
 }
 
-void radio_statistics__init(void)
-{
-    radio__printf(true, "Init Radio Statistics\n");
-    memset((void *)&transmit_statistics, 0, sizeof(transmit_statistics_t));
-  radio_statistics__set_audio_mode(app_process__is_audio_stereo(), app_process__is_audio_encoder_enabled());
-    transmit_statistics.moving_average_tx_delta = stereo_or_mono_config->expected_tx_microsecond_delta;
+void radio_statistics__init(void) {
+    radio_statistics__printf(true, "Init Radio Statistics\n");
+  memset((void *)&transmit_statistics, 0, sizeof(transmit_statistics_t));
+    radio_statistics__reset_counters();
+  radio_statistics__set_audio_mode(app_process__is_audio_stereo(),
+                                   app_process__is_audio_encoder_enabled());
+  saved_SEQUENCE_NUMBER_WINDOW_START = 0;
+    transmit_statistics.moving_average_tx_delta = 0;
+  radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_MOVING_AVERAGE_TX_DELTA] =
+      transmit_statistics.moving_average_tx_delta;
 }
 
-void radio_statistics__reset_radio_statistics_for_new_measurement(void)
-{
-    uint32_t saved_last_tx_timestamp_micros = transmit_statistics.last_tx_timestamp_micros;
-    memset((void *)&transmit_statistics, 0, sizeof(transmit_statistics_t));
-    transmit_statistics.moving_average_tx_delta = stereo_or_mono_config->expected_tx_microsecond_delta;
-    transmit_statistics.last_tx_timestamp_micros = saved_last_tx_timestamp_micros;
-    radio__printf(true, "Reset Radio Statistics\n");
+void radio_statistics__reset_radio_statistics_for_new_measurement(void) {
+  uint32_t saved_last_tx_timestamp_micros =
+      transmit_statistics.last_tx_timestamp_micros;
+  memset((void *)&transmit_statistics, 0, sizeof(transmit_statistics_t));
+  memset((void *)radio_statistics_counter_values, 0, sizeof(radio_statistics_counter_values));
+  transmit_statistics.last_tx_timestamp_micros = saved_last_tx_timestamp_micros;
+  tx_delta_accumulator = 0;
+  tx_delta_sample_count = 0;
+  radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_SEQUENCE_NUMBER_WINDOW_START] = saved_SEQUENCE_NUMBER_WINDOW_START;
+  // radio_statistics__printf(true, "Reset Radio Statistics\n");
 }
 
-static bool radio__validate_radio_tx_count(void)
-{
-
-  if ((transmit_statistics.number_of_TX_packets_sent_this_second >= ((stereo_or_mono_config->number_of_tx_per_second_expected) - 1)) && (transmit_statistics.number_of_TX_packets_sent_this_second <= ((stereo_or_mono_config->number_of_tx_per_second_expected) + 1)))
-  {
-    return true;
-  }
-  else
-  {
-    // MAYBE DO MORE
-    return false;
-  }
+void radio_statistics__validate_radio_statistics(void) {
+  return;
 }
 
-static bool radio__validate_radio_tx_timestamp_deltas(void)
-{
-  bool too_slow_flag = false;
-  bool too_fast_flag = false;
+bool radio_statistics__note_successful_tx(uint32_t sequence_number,
+                                          uint32_t timestamp_of_tx) {
+  // radio__printf(true, "TX: Seq: %u\n", (unsigned int)sequence_number);
 
-  if (transmit_statistics.min_tx_timestamp_delta < (stereo_or_mono_config->acceptable_tx_microsecond_delta_lower))
-  {
-    // TX ING TOO FAST
-    too_fast_flag = true;
-  }
-  if (transmit_statistics.max_tx_timestamp_delta > (stereo_or_mono_config->acceptable_tx_microsecond_delta_upper))
-  {
-    // TX ING TOO SLOW
-    too_slow_flag = true;
-  }
-  return (too_fast_flag | too_slow_flag);
-}
+  NUMBER_OF_TX_PACKETS_SENT_THIS_SECOND++;
+  radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_SEQUENCE_NUMBER_WINDOW_END] = sequence_number;
 
-void radio_statistics__validate_radio_statistics(void)
-{
-  // TODO CRITICAl SECTION??
-  static uint32_t last_validation_timestamp_millis = 0;
+  if (NUMBER_OF_TX_PACKETS_SENT_THIS_SECOND == 1) {
+    if (transmit_statistics.last_tx_timestamp_micros == 0) {
+      // Only runs once at init
+      // No previous TX so can't calculate a delta
+      transmit_statistics.last_tx_timestamp_micros = timestamp_of_tx;
+      radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_LAST_TX_TIMESTAMP_MICROS] = transmit_statistics.last_tx_timestamp_micros;
 
-  if (radio_statistics_validate_timing == false)
-  {
-    last_validation_timestamp_millis = scheduler__get_millisecond_ticks();
-    radio_statistics__reset_radio_statistics_for_new_measurement();
-    return;
-  }
-
-  // validate period
-  if (((scheduler__get_millisecond_ticks() - last_validation_timestamp_millis) >= 999) && ((scheduler__get_millisecond_ticks() - last_validation_timestamp_millis) <= 1001))
-  {
-    bool good_count = radio__validate_radio_tx_count();
-    bool good_deltas = radio__validate_radio_tx_timestamp_deltas();
-    (void)good_deltas;
-
-    radio__printf(true, "-  Max Delta: %u. , Min Delta : %u\n", (unsigned int)transmit_statistics.max_tx_timestamp_delta, (unsigned int)transmit_statistics.min_tx_timestamp_delta);
-    radio__printf(true, "-  TX Count : %u\n", (unsigned int)transmit_statistics.number_of_TX_packets_sent_this_second);
-    if (transmit_statistics.bad_timestamps_count > 0)
-    {
-      radio__printf(true, "-  Bad Timestamps : \n");
-      for (uint32_t i = 0; i < transmit_statistics.bad_timestamps_count; i++)
-      {
-        radio__printf(true, "   -- Seq: %u - Delta: %u - Timestamp: %u\n",
-               (unsigned int)transmit_statistics.bad_timestamps[i].sequence_number,
-               (unsigned int)transmit_statistics.bad_timestamps[i].timestamp_delta_from_previous,
-               (unsigned int)transmit_statistics.bad_timestamps[i].tx_timestamp);
-      }
-    }
-    if (good_count == false)
-    {
-      // if number_of_TX_packets_sent_this_second
+      return true;
     }
   }
-  else
-  {
-    radio__printf(true, "-  Measurement Period Start : %u\n", (unsigned int)last_validation_timestamp_millis);
-    radio__printf(true, "-  Measurement Period End : %u\n", (unsigned int)scheduler__get_millisecond_ticks());
-    radio__printf(true, "-  Measurement Period Time : %u\n", (unsigned int)(scheduler__get_millisecond_ticks() - last_validation_timestamp_millis));
-    // TODO HANDLE ELSE
-  }
 
-  last_validation_timestamp_millis = scheduler__get_millisecond_ticks();
-  radio_statistics__reset_radio_statistics_for_new_measurement();
-}
-
-bool radio_statistics__note_successful_tx(uint32_t sequence_number, uint32_t timestamp_of_tx)
-{
-  if (radio_statistics_validate_timing == false)
-  {
+  if (timestamp_of_tx < transmit_statistics.last_tx_timestamp_micros) {
     transmit_statistics.last_tx_timestamp_micros = timestamp_of_tx;
-    transmit_statistics.number_of_TX_packets_sent_this_second++;
+    radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_LAST_TX_TIMESTAMP_MICROS] = transmit_statistics.last_tx_timestamp_micros;
     return true;
   }
 
-    if (transmit_statistics.number_of_TX_packets_sent_this_second == 0)
-    {
-        // Rest Deltas
-        transmit_statistics.max_tx_timestamp_delta = stereo_or_mono_config->expected_tx_microsecond_delta;
-        transmit_statistics.min_tx_timestamp_delta = stereo_or_mono_config->expected_tx_microsecond_delta;
-        radio__printf(true, "-  Reset Max Delta to: %u\n", (unsigned int)transmit_statistics.max_tx_timestamp_delta);
-        radio__printf(true, "-  Reset Min Delta to: %u\n", (unsigned int)transmit_statistics.min_tx_timestamp_delta);
+  uint32_t tx_delta =
+      timestamp_of_tx - transmit_statistics.last_tx_timestamp_micros;
 
-        //printf_to_buf_append_time(0,"-  New Max Delta: %u. , New Min Delta : %u\n", (unsigned int)transmit_statistics.max_tx_timestamp_delta, (unsigned int)transmit_statistics.min_tx_timestamp_delta);
+  radio_statistics__update_delta_counters(tx_delta);
+  radio_statistics__accumulate_tx_delta(tx_delta);
 
-        if (transmit_statistics.last_tx_timestamp_micros == 0)
-        {
-            // Only runs once at init
-            // No previous TX so can't calculate a delta
-            transmit_statistics.number_of_TX_packets_sent_this_second++;
-            transmit_statistics.last_tx_timestamp_micros = timestamp_of_tx;
-            
-            return true;
-        }
-    }
-
-        if (timestamp_of_tx < transmit_statistics.last_tx_timestamp_micros)
-        {
-          transmit_statistics.last_tx_timestamp_micros = timestamp_of_tx;
-          transmit_statistics.number_of_TX_packets_sent_this_second++;
-          return true;
-        }
-
-    uint32_t tx_delta = timestamp_of_tx - transmit_statistics.last_tx_timestamp_micros;
-
-    if (tx_delta > stereo_or_mono_config->acceptable_tx_microsecond_delta_upper)
-    {
-      if (transmit_statistics.bad_timestamps_count >= BAD_TIMESTAMPS_SIZE)
-      {
-        radio__printf(true, "-  Bad Timestamps Limit Reached: \
+  if (tx_delta > stereo_or_mono_config->acceptable_tx_microsecond_delta_upper) {
+    if (transmit_statistics.bad_timestamps_count >= BAD_TIMESTAMPS_SIZE) {
+        radio_statistics__printf(true, "-  Bad Timestamps Limit Reached: \
   ");
-        return true;
-      }
-
-        transmit_statistics.max_tx_timestamp_delta = tx_delta;
-        //  printf_to_buf_append_time(0,"-  Max Delta Violation: %u  Max: %u\n", (unsigned int)tx_delta, (unsigned int)upper_valid_tx_delta_limit);
-        transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count].sequence_number = sequence_number;
-        transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count].timestamp_delta_from_previous = tx_delta;
-        transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count].tx_timestamp = timestamp_of_tx;
-        transmit_statistics.bad_timestamps_count++;
-        radio__printf(true, "-  New Max Delta: %u  Seq : %u\n", (unsigned int)transmit_statistics.max_tx_timestamp_delta, sequence_number);
+      return true;
     }
-    else if (tx_delta < stereo_or_mono_config->acceptable_tx_microsecond_delta_lower)
-    {
-      if (transmit_statistics.bad_timestamps_count >= BAD_TIMESTAMPS_SIZE)
-      {
-        radio__printf(true, "-  Bad Timestamps Limit Reached: \
+
+    //  printf_to_buf_append_time(0,"-  Max Delta Violation: %u  Max: %u\n",
+    //  (unsigned int)tx_delta, (unsigned int)upper_valid_tx_delta_limit);
+    transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count]
+        .sequence_number = sequence_number;
+    transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count]
+        .timestamp_delta_from_previous = tx_delta;
+    transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count]
+        .tx_timestamp = timestamp_of_tx;
+    transmit_statistics.bad_timestamps_count++;
+    radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_BAD_TIMESTAMPS_COUNT] = transmit_statistics.bad_timestamps_count;
+    radio_statistics__printf(true, "-  New Max Delta: %u  Seq : %u\n",
+                  (unsigned int)transmit_statistics.max_tx_timestamp_delta,
+                  sequence_number);
+  } else if (tx_delta <
+             stereo_or_mono_config->acceptable_tx_microsecond_delta_lower) {
+    if (transmit_statistics.bad_timestamps_count >= BAD_TIMESTAMPS_SIZE) {
+        radio_statistics__printf(true, "-  Bad Timestamps Limit Reached: \
   ");
-        return true;
-      }
-
-        transmit_statistics.min_tx_timestamp_delta = tx_delta;
-        //  printf_to_buf_append_time(0,"-  Min Delta Violation: %u  Min: %u\n", (unsigned int)tx_delta, (unsigned int)upper_valid_tx_delta_limit);
-        transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count].sequence_number = sequence_number;
-        transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count].timestamp_delta_from_previous = tx_delta;
-        transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count].tx_timestamp = timestamp_of_tx;
-        transmit_statistics.bad_timestamps_count++;
-        radio__printf(true, "-  New Min Delta: %u  Seq : %u\n", (unsigned int)transmit_statistics.min_tx_timestamp_delta, sequence_number);
+      return true;
     }
 
-    transmit_statistics.last_tx_timestamp_micros = timestamp_of_tx;
-    transmit_statistics.number_of_TX_packets_sent_this_second++;
-    return true;
+    //  printf_to_buf_append_time(0,"-  Min Delta Violation: %u  Min: %u\n",
+    //  (unsigned int)tx_delta, (unsigned int)upper_valid_tx_delta_limit);
+    transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count].sequence_number = sequence_number;
+    transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count]
+        .timestamp_delta_from_previous = tx_delta;
+    transmit_statistics.bad_timestamps[transmit_statistics.bad_timestamps_count]
+        .tx_timestamp = timestamp_of_tx;
+    transmit_statistics.bad_timestamps_count++;
+    radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_BAD_TIMESTAMPS_COUNT] = transmit_statistics.bad_timestamps_count;
+    radio_statistics__printf(true, "-  New Min Delta: %u  Seq : %u\n",
+                  (unsigned int)transmit_statistics.min_tx_timestamp_delta,
+                  sequence_number);
+  }
+
+  transmit_statistics.last_tx_timestamp_micros = timestamp_of_tx;
+  radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_LAST_TX_TIMESTAMP_MICROS] = transmit_statistics.last_tx_timestamp_micros;
+  return true;
 }

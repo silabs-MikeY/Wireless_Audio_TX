@@ -9,33 +9,37 @@ target_sources(TX_Board PRIVATE
 	"../audio_ring_buffer.c"
 	"../libraries/RGB.c"
 	"../libraries/VDAC.c"
+	"../libraries/adpcm.c"
 	"../libraries/button.c"
 	"../libraries/counters_new.c"
-	"../events_print.c"
+	"../libraries/events_print.c"
 	"../libraries/generic.c"
 	"../libraries/microseconds.c"
 	"../libraries/print.c"
 	"../print_interfacing.c"
 	"../libraries/scheduler.c"
 	"../state_machine.c"
-	"../timer_helper.c"
-	"../wdog.c"
+	"../libraries/timer_helper.c"
+	"../libraries/wdog.c"
 	"../radio/radio_base.c"
 	"../radio/radio_receive.c"
 	"../radio/radio_retry.c"
+	"../radio/tx_retry.c"
 	"../radio/radio_statistics.c"
 	"../radio/radio_transmit.c"
 	"../counter_interface.c"
 	"../audio_pipeline.c"
 	"../radio_packet_buffers.c"
 	"../audio_encoding.c"
-	"../adpcm.c"
+	"../audio_intensity.c"
+	"../uart_sample_debug.c"
+	"../state_machine_interface.c"
 )
 
 get_target_property(interface_compile_options slc INTERFACE_COMPILE_OPTIONS)
 	list(REMOVE_ITEM interface_compile_options $<$<AND:$<CONFIG:default_config>,$<COMPILE_LANGUAGE:C>>:-Og>)
 	list(REMOVE_ITEM interface_compile_options $<$<AND:$<CONFIG:default_config>,$<COMPILE_LANGUAGE:CXX>>:-Og>)
-set_target_properties(TX_Board PROPERTIES INTERFACE_COMPILE_OPTIONS "${interface_compile_opitions}")
+set_target_properties(TX_Board PROPERTIES INTERFACE_COMPILE_OPTIONS "${interface_compile_options}")
 
 target_compile_options(TX_Board PRIVATE
 	$<$<AND:$<CONFIG:default_config>,$<COMPILE_LANGUAGE:C>>:-O0>

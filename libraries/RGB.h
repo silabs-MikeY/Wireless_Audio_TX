@@ -71,9 +71,6 @@ static const color_t black = {
 };
 
 void rgb__set_rgb_out(uint8_t RGB_number, color_t color, bool clear_other_colors, uint8_t intensity);
-void rgb__check_level(uint8_t* new_data_pointer);
-void rgb__get_audio_level_stats(uint32_t *min_level_mv, uint32_t *max_level_mv);
-void rgb__run_signal_intensity_state_machine(uint32_t current_tick);
 void rgb__timer_init(void);
 void rgb__init(void);
 void rgb__deinit(void);

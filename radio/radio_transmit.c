@@ -2,8 +2,14 @@
 #include "radio_base.h"
 #include "radio_packet_buffers.h"
 #include "radio_packet_format.h"
-
+#include "tx_retry.h"
+#include "rail.h"
 #include <string.h>
+#include "sl_rail_util_init.h"
+
+// -----------------------------------------------------------------------------
+//                     Exported Counters
+// -----------------------------------------------------------------------------
 
 typedef enum radio_transmit_counter_index_s {
     number_of_TX_attempts = 0,
@@ -16,16 +22,6 @@ typedef enum radio_transmit_counter_index_s {
     number_of_TX_fail_underflow,
     number_of_TX_fail_busy,
     number_of_TX_fail_missed,
-    number_of_TX_retry_attempts,
-    number_of_TX_retry_attempt_success,
-    number_of_TX_retry_attempt_failed,
-    number_of_TX_retry_success,
-    number_of_TX_retry_fail_failed_to_send,
-    number_of_TX_retry_fail_abort,
-    number_of_TX_retry_fail_block,
-    number_of_TX_retry_fail_underflow,
-    number_of_TX_retry_fail_busy,
-    number_of_TX_retry_fail_missed,
     RADIO_TRANSMIT_NUMBER_OF_COUNTERS
 } radio_transmit_counter_index_t;
 
@@ -41,31 +37,7 @@ static const char *radio_transmit_counter_names[RADIO_TRANSMIT_NUMBER_OF_COUNTER
     "number_of_TX_fail_underflow",
     "number_of_TX_fail_busy",
     "number_of_TX_fail_missed",
-    "number_of_TX_retry_attempts",
-    "number_of_TX_retry_attempt_success",
-    "number_of_TX_retry_attempt_failed",
-    "number_of_TX_retry_success",
-    "number_of_TX_retry_fail_failed_to_send",
-    "number_of_TX_retry_fail_abort",
-    "number_of_TX_retry_fail_block",
-    "number_of_TX_retry_fail_underflow",
-    "number_of_TX_retry_fail_busy",
-    "number_of_TX_retry_fail_missed",
 };
-
-static bool radio_transmit__send_packet(uint32_t buffer_index, bool retry);
-static void radio_transmit__increment_counter(uint32_t counter_index);
-
-uint8_t radio_tx_fifo[RADIO_FIFO_SIZE] __attribute__((aligned(4)));
-uint32_t radio_tx_fifo_Size = 0;
-
-typedef struct tx_packet_in_flight_info_s
-{
-    uint32_t packet_buffer_index;
-    bool retry;
-    bool in_flight;
-} tx_packet_in_flight_info_t;
-tx_packet_in_flight_info_t tx_packet_in_flight_info;
 
 uint32_t radio_transmit__get_number_of_counters(void)
 {
@@ -105,13 +77,31 @@ static void radio_transmit__increment_counter(uint32_t counter_index)
     }
 }
 
+// -----------------------------------------------------------------------------
+//                     Exported Counters End
+// -----------------------------------------------------------------------------
+
+static bool radio_transmit__send_packet(uint32_t buffer_index, bool retry);
+static void radio_transmit__increment_counter(uint32_t counter_index);
+
+uint8_t radio_tx_fifo[RADIO_FIFO_SIZE] __attribute__((aligned(4)));
+uint32_t radio_tx_fifo_Size = 0;
+
+typedef struct tx_packet_in_flight_info_s
+{
+    uint32_t packet_buffer_index;
+    bool retry;
+    bool in_flight;
+} tx_packet_in_flight_info_t;
+tx_packet_in_flight_info_t tx_packet_in_flight_info;
+
 void radio__set_control_bit(uint8_t *control_bits, uint8_t bit)
 {
     *control_bits |= bit;
 }
 void radio__reset_control_bit(uint8_t *control_bits, uint8_t bit)
 {
-    *control_bits &= bit;
+    *control_bits &= ~bit;
 }
 
 /**
@@ -239,7 +229,7 @@ static bool radio_transmit__send_packet(uint32_t buffer_index, bool retry)
     radio_transmit__increment_counter(number_of_TX_attempts);
     if (retry)
     {
-        radio_transmit__increment_counter(number_of_TX_retry_attempts);
+        tx_retry__increment_counter(TX_RETRY_COUNTER_ATTEMPTS);
     }
 
     RAIL_Status_t RAIL_StartTx_return = RAIL_StartTx(rail_handle, radio__get_channel(), RAIL_TX_OPTIONS_DEFAULT, NULL);
@@ -251,7 +241,7 @@ static bool radio_transmit__send_packet(uint32_t buffer_index, bool retry)
         // radio_transmit__mark_packet_as_successfully_sent(buffer_index);
         if (retry)
         {
-            radio_transmit__increment_counter(number_of_TX_retry_attempt_success);
+            tx_retry__increment_counter(TX_RETRY_COUNTER_ATTEMPT_SUCCESS);
         }
         else
         {
@@ -500,7 +490,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
 
         if (retry)
         {
-            radio_transmit__increment_counter(number_of_TX_retry_success);
+            tx_retry__increment_counter(TX_RETRY_COUNTER_SUCCESS);
         }
         else
         {
@@ -520,7 +510,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
             // debug__log_TX_fail(tx_packet_in_flight_info.retry);
             if (retry)
             {
-                radio_transmit__increment_counter(number_of_TX_retry_attempt_failed);
+                tx_retry__increment_counter(TX_RETRY_COUNTER_ATTEMPT_FAILED);
             }
             else
             {
@@ -531,7 +521,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
                 // debug__log_TX_abort(tx_packet_in_flight_info.retry);
                 if (retry)
                 {
-                    radio_transmit__increment_counter(number_of_TX_retry_fail_abort);
+                    tx_retry__increment_counter(TX_RETRY_COUNTER_FAIL_ABORT);
                 }
                 else
                 {
@@ -543,7 +533,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
                 // debug__log_TX_block(tx_packet_in_flight_info.retry);
                 if (retry)
                 {
-                    radio_transmit__increment_counter(number_of_TX_retry_fail_block);
+                    tx_retry__increment_counter(TX_RETRY_COUNTER_FAIL_BLOCK);
                 }
                 else
                 {
@@ -555,7 +545,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
                 // debug__log_TX_underflow(tx_packet_in_flight_info.retry);
                 if (retry)
                 {
-                    radio_transmit__increment_counter(number_of_TX_retry_fail_underflow);
+                    tx_retry__increment_counter(TX_RETRY_COUNTER_FAIL_UNDERFLOW);
                 }
                 else
                 {
@@ -567,7 +557,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
                 // debug__log_TX_missed(tx_packet_in_flight_info.retry);
                 if (retry)
                 {
-                    radio_transmit__increment_counter(number_of_TX_retry_fail_missed);
+                    tx_retry__increment_counter(TX_RETRY_COUNTER_FAIL_MISSED);
                 }
                 else
                 {
@@ -579,7 +569,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
                 // debug__log_TX_busy(tx_packet_in_flight_info.retry);
                 if (retry)
                 {
-                    radio_transmit__increment_counter(number_of_TX_retry_fail_busy);
+                    tx_retry__increment_counter(TX_RETRY_COUNTER_FAIL_BUSY);
                 }
                 else
                 {

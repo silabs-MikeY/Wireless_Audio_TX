@@ -52,5 +52,12 @@
         "${workspaceFolder}/radio"
     ],
     "cortex-debug.variableUseNaturalFormat": true,
-    "cmake.sourceDirectory": "/Users/miyablon/SimplicityStudio/v6_workspace/TX_Board/cmake_gcc"
+    "cmake.sourceDirectory": "/Users/miyablon/SimplicityStudio/v6_workspace/TX_Board/cmake_gcc",
+    "python-envs.pythonProjects": [
+        {
+            "path": ".",
+            "envManager": "ms-python.python:venv",
+            "packageManager": "ms-python.python:pip"
+        }
+    ]
 }

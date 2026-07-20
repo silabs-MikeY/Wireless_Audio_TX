@@ -34,6 +34,7 @@
 #include "sl_rail_util_init.h"
 #include "state_machine.h"
 #include "generic.h"
+#include "print_interfacing.h"
 #include "rail.h"
 
 volatile uint32_t msTicks = 0;
@@ -94,8 +95,6 @@ extern sl_iostream_t *sl_iostream_inst_handle;
  *****************************************************************************/
 RAIL_Handle_t app_init(void)
 {
-  process_device_reset();
-
   // Get RAIL handle, used later by the application
   RAIL_Handle_t rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_INST);
 
@@ -104,82 +103,15 @@ RAIL_Handle_t app_init(void)
   // This is called once during start-up.                                    //
   /////////////////////////////////////////////////////////////////////////////
 
-//  CMU_ClockEnable(cmuClock_GPIO, true);
-//  CMU_ClockEnable(cmuClock_PRS, true);
+  process_device_reset();
 
   sl_iostream_set_default(sl_iostream_get_handle("inst"));
+  print_interfacing__init();
 
-  printf("\n\n\nApplication Start\n\n\n");
+  // printf("\n\n\nTransmit Application Start\n\n\n");
+  print_interfacing__printf_static_string(0, true, "\n\n\nTransmit Application Start\n\n\n");
 
   state_machine__run_state_machine();
-
-  //  GPIO_PinModeSet(gpioPortA, 7, gpioModePushPull, 1);
-  //  GPIO_PinOutSet(gpioPortA, 7);
-  //  GPIO_PinModeSet(gpioPortA, 8, gpioModeInput, 0);
-
-//  GPIO_PinModeSet(gpioPortB, 3, gpioModePushPull, 0);
-
-  //  GPIO_PinModeSet(gpioPortA, 4, gpioModePushPull, 0);
-  //  GPIO_PinModeSet(gpioPortA, 5, gpioModePushPull, 0);
-  //  GPIO_PinModeSet(gpioPortA, 6, gpioModePushPull, 0);
-  //  GPIO_PinModeSet(gpioPortA, 0, gpioModePushPull, 0);
-  //  GPIO_PinModeSet(gpioPortB, 0, gpioModePushPull, 0);
-  //  GPIO_PinModeSet(gpioPortB, 1, gpioModePushPull, 0);
-
-  //  GPIO_PinOutSet(gpioPortA, 4);
-  //  GPIO_PinOutSet(gpioPortA, 5);
-  //  GPIO_PinOutSet(gpioPortA, 6);
-  //  GPIO_PinOutSet(gpioPortA, 0);
-  //  GPIO_PinOutSet(gpioPortB, 0);
-  //  GPIO_PinOutSet(gpioPortB, 1);
-
-//  GPIO_PinOutClear(gpioPortA, 4);
-//  GPIO_PinOutClear(gpioPortA, 5);
-//  GPIO_PinOutClear(gpioPortA, 6);
-//  GPIO_PinOutClear(gpioPortA, 0);
-//  GPIO_PinOutClear(gpioPortB, 0);
-//  GPIO_PinOutClear(gpioPortB, 1);
-
-//  printf_to_buf_append_time(0,"\n\n\n\n\n\n\n\n\n\n");
-//  printf_to_buf_append_time(0,"init Main\n");
-//  sl_iostream_printf_to_buf_append_time(0,sl_iostream_get_default(),"init default IOStream\n");
-//  sl_iostream_printf_to_buf_append_time(0,sl_iostream_get_handle("inst"),"init Inst\n");
-//  sl_iostream_printf_to_buf_append_time(0,sl_iostream_inst_handle,"init Inst\n");
-//  sl_iostream_printf_to_buf_append_time(0,sl_iostream_get_handle("vcom"),"init Vcom\n");
-//  //  sl_iostream_set_default(sl_iostream_vcom_handle);
-//  printf_to_buf_append_time(0,"\n\n\n\n\n\n\n\n\n\n");
-//  printf_to_buf_append_time(0,"init3\n");
-//  sl_iostream_printf_to_buf_append_time(0,sl_iostream_get_default(),"init4\n");
-//  sl_iostream_set_default(sl_iostream_get_handle("inst"));
-
-//  counters__init_counters();
-//  scheduler__init_SysTick();
-
-//  radio__init_packet_buffers();
-
-//  button__init();
-//  vdac__init_vdac();
-
-//#define ENABLE_PRS 1
-//#if (ENABLE_PRS==1)
-//  CMU_ClockEnable(cmuClock_PRS, true);
-//  CMU_ClockEnable(cmuClock_GPIO, true);
-//  GPIO_PinOutSet(gpioPortB, 1);
-//  PRS_SourceAsyncSignalSet(0,
-//                           PRS_SOURCE,
-//                           PRS_SIGNAL);
-//  PRS_PinOutput(0,
-//                prsTypeAsync,
-//                gpioPortB,
-//                1);
-//#endif
-
-
-
-
-
-//  radio__radio_init();
-
 
   return rail_handle;
 }

@@ -28,6 +28,7 @@ typedef struct packet_buffer_s {
 	bool send_attempted;
 	uint32_t micros_timestamp_added_to_buffer;
 	uint32_t micros_timestamp_packet_sent;
+	uint32_t micros_timestamp_retry_after;
 	bool tx_processed;
 } __attribute__((aligned(4))) packet_buffer_t;
 

@@ -108,17 +108,22 @@ extern "C"
 
 typedef struct{
   char print_text[100];
+  const char *print_text_pointer;
   bool used;
+  bool use_print_text_pointer;
   uint32_t timestamp_ticks;
 } debug__print_buffer_t;
-#define NUMBER_OF_PRINT_BUFFERS 100
+#define NUMBER_OF_PRINT_BUFFERS 200
 
 void debug__check_print_buffers_and_print(void);
 void debug__print_all_buffers(void);
 void printf_to_buf(uint32_t time, const char *format, ...);
+void printf_to_buf_string(uint32_t time, const char *text);
+void printf_to_buf_static_string(uint32_t time, const char *text);
 void debug__printf_to_buf_append_time(uint32_t time, const char *format, ...);
 void printf_to_buf_array(const uint8_t *data, uint32_t data_length, bool line_break_at_end);
 void debug__format_timestamp_with_commas(uint64_t value, char *out, size_t outSize);
+void debug__write_console_text(const char *text);
 
 #ifdef __cplusplus
 }
