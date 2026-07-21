@@ -9,6 +9,10 @@ static uint32_t button_press_start_timestamp = 0;
 #define BUTTON_PRESS_DEBOUNCE_MS 50U
 #define BUTTON_LONG_PRESS_THRESHOLD_MS 1000U
 
+// -----------------------------------------------------------------------------
+//                     Button Callbacks
+// -----------------------------------------------------------------------------
+
 void button__rising_edge(void)
 {
   button_press_start_timestamp = scheduler__get_millisecond_ticks();
@@ -32,3 +36,7 @@ void button__falling_edge(void)
     rgb__start_radio_status_blink_force();
   }
 }
+
+// -----------------------------------------------------------------------------
+//                     Button Callbacks End
+// -----------------------------------------------------------------------------

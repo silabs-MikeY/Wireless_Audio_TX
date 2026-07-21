@@ -1,6 +1,10 @@
 #include "events_prints.h"
 #include "rail_types.h"
 
+// -----------------------------------------------------------------------------
+//                     RAIL Event String Helpers
+// -----------------------------------------------------------------------------
+
 const char * getString(long long unsigned int inputValue)
 {
   switch (inputValue)
@@ -356,3 +360,7 @@ const char * getString(long long unsigned int inputValue)
   }
 }
 */
+
+// -----------------------------------------------------------------------------
+//                     RAIL Event String Helpers End
+// -----------------------------------------------------------------------------

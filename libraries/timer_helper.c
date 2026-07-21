@@ -2,6 +2,10 @@
 
 #include "print.h"
 
+// -----------------------------------------------------------------------------
+//                     Timer Helper General
+// -----------------------------------------------------------------------------
+
 /**
  * @brief Checks if a clock is enabled by querying its frequency.
  * Returns true if clock frequency is non-zero (enabled).
@@ -234,3 +238,7 @@ bool timers__init_timer_cmu(TIMER_TypeDef *timer)
   }
     return false;
 }
+
+// -----------------------------------------------------------------------------
+//                     Timer Helper General End
+// -----------------------------------------------------------------------------

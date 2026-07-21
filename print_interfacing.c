@@ -6,7 +6,7 @@
 #include "microseconds.h"
 #include "radio_packet_buffers.h"
 #include "radio_base.h"
-#include "counters_new.h"
+#include "counters.h"
 #include "scheduler.h"
 #include "libraries/console_tx.h"
 #include "uart_sample_debug.h"

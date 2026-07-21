@@ -1,4 +1,4 @@
-#include "counters_new.h"
+#include "counters.h"
 #include <sl_core.h>
 #include <stdint.h>
 #include <string.h>
@@ -20,10 +20,6 @@ typedef struct new_counters_s {
 new_counters_t new_counters[COUNTER_BUFFER_MAX_COUNT];
 static uint32_t counters_used_count = 0;
 
-// static uint32_t new_saved_counters[COUNTER_BUFFER_MAX_COUNT] = {0};
-// static char* new_counters_names[COUNTER_BUFFER_MAX_COUNT] = {0};
-// static uint32_t* new_counter_addresses[COUNTER_BUFFER_MAX_COUNT] = {0};
-
 static bool printing_flag = false;
 static bool printing_full_snapshot = true;
 static uint32_t snapshots_since_full_print = COUNTER_FULL_PRINT_INTERVAL_SNAPSHOTS;
@@ -34,15 +30,9 @@ static bool counters__counter_should_print(const new_counters_t *counter);
 static bool counters__print_counter(new_counters_t *counter,
                                     uint32_t counter_index);
 
-// // User implementation of the weak function to get counter values.
-// // This should be overridden in the application code and return requested
-// counter value based on the index.
-// // For now, it returns 0 for all counters.
-// __attribute__((weak)) uint32_t counters_new__get_counter_value(uint32_t
-// counter_index)
-// {
-//     return 0;
-// }
+// -----------------------------------------------------------------------------
+//                     Weak function implementations, do not rename.
+// -----------------------------------------------------------------------------
 
 __attribute__((weak)) void counters__printf(bool add_timestamp,
                                             const char *format, ...) {
@@ -62,6 +52,13 @@ __attribute__((weak)) void counters__pre_save_hook(void) {}
 
 __attribute__((weak)) void counters__post_print_hook(void) {}
 
+// -----------------------------------------------------------------------------
+//                     Weak function implementations End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Counter Registration
+// -----------------------------------------------------------------------------
 
 // Register a new counter with a name and get its index. Returns 0 on success,
 // negative value on error.
@@ -119,6 +116,14 @@ int32_t counters__register_counter(const char *input_counter_name,
   return 0;
 }
 
+// -----------------------------------------------------------------------------
+//                     Counter Registration End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Counter Snapshot
+// -----------------------------------------------------------------------------
+
 // Saves the current counter values to non-volatile storage.
 static void counters__save_counters(void) {
   for (uint32_t i = 0; i < counters_used_count; i++) {
@@ -155,6 +160,14 @@ void counters__save_and_print_counters(uint32_t current_timestamp) {
                    (unsigned int)current_timestamp);
 }
 
+// -----------------------------------------------------------------------------
+//                     Counter Snapshot End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Counter Printing
+// -----------------------------------------------------------------------------
+
 void counters__run_print_state_machine(void) {
   if (printing_flag) {
     if (printing_counter_index < counters_used_count) {
@@ -170,17 +183,6 @@ void counters__run_print_state_machine(void) {
       counters__post_print_hook();
     }
   }
-}
-
-bool counters__init(void) {
-  counters_used_count = 0;
-  memset(new_counters, 0, sizeof(new_counters));
-
-  printing_flag = false;
-  printing_full_snapshot = true;
-  snapshots_since_full_print = COUNTER_FULL_PRINT_INTERVAL_SNAPSHOTS;
-  printing_counter_index = 0;
-  return true;
 }
 
 static bool counters__counter_should_print(const new_counters_t *counter) {
@@ -232,3 +234,26 @@ static bool counters__print_counter(new_counters_t *counter,
   counter->has_printed_counter_value = true;
   return true;
 }
+
+// -----------------------------------------------------------------------------
+//                     Counter Printing End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Counter General
+// -----------------------------------------------------------------------------
+
+bool counters__init(void) {
+  counters_used_count = 0;
+  memset(new_counters, 0, sizeof(new_counters));
+
+  printing_flag = false;
+  printing_full_snapshot = true;
+  snapshots_since_full_print = COUNTER_FULL_PRINT_INTERVAL_SNAPSHOTS;
+  printing_counter_index = 0;
+  return true;
+}
+
+// -----------------------------------------------------------------------------
+//                     Counter General End
+// -----------------------------------------------------------------------------

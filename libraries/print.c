@@ -4,6 +4,10 @@
 
 #include <stdarg.h>
 
+// -----------------------------------------------------------------------------
+//                     Weak function implementations, do not rename.
+// -----------------------------------------------------------------------------
+
 void __attribute__((weak)) debug__write_console_text(const char *text)
 {
     if (text == NULL)
@@ -13,6 +17,14 @@ void __attribute__((weak)) debug__write_console_text(const char *text)
 
     //printf("%s", text);
 }
+
+// -----------------------------------------------------------------------------
+//                     Weak function implementations End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Print Formatting Helpers
+// -----------------------------------------------------------------------------
 
 void debug__format_timestamp_with_commas(uint64_t value, char *out, size_t outSize)
 {
@@ -52,6 +64,14 @@ void debug__format_timestamp_with_commas(uint64_t value, char *out, size_t outSi
         }
     }
 }
+
+// -----------------------------------------------------------------------------
+//                     Print Formatting Helpers End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Print Buffer Queue
+// -----------------------------------------------------------------------------
 
 #if (DEBUG_PRINT_TO_BUFFERS == 1)
 volatile debug__print_buffer_t debug__print_buffers[NUMBER_OF_PRINT_BUFFERS];
@@ -585,3 +605,7 @@ void printf_to_buf_array(const uint8_t *data, uint32_t data_length, bool line_br
     (void)line_break_at_end;
 }
 #endif
+
+// -----------------------------------------------------------------------------
+//                     Print Buffer Queue End
+// -----------------------------------------------------------------------------

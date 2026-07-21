@@ -18,10 +18,22 @@ static ldma_manager_callback_t s_callbacks[LDMA_MANAGER_CHANNEL_COUNT] = { 0 };
 static void *s_callback_contexts[LDMA_MANAGER_CHANNEL_COUNT] = { 0 };
 static unsigned int s_callback_sequence_numbers[LDMA_MANAGER_CHANNEL_COUNT] = { 0 };
 
+// -----------------------------------------------------------------------------
+//                     LDMA Manager Helpers
+// -----------------------------------------------------------------------------
+
 static bool ldma_manager__channel_is_valid(unsigned int channel)
 {
   return channel < LDMA_MANAGER_CHANNEL_COUNT;
 }
+
+// -----------------------------------------------------------------------------
+//                     LDMA Manager Helpers End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     LDMA Manager General
+// -----------------------------------------------------------------------------
 
 bool ldma_manager__init(void)
 {
@@ -150,6 +162,14 @@ bool ldma_manager__set_callback(unsigned int channel,
   return true;
 }
 
+// -----------------------------------------------------------------------------
+//                     LDMA Manager General End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Interrupt Handlers
+// -----------------------------------------------------------------------------
+
 void LDMA_IRQHandler(void)
 {
   uint32_t pending = LDMA_IntGetEnabled();
@@ -175,3 +195,7 @@ void LDMA_IRQHandler(void)
     }
   }
 }
+
+// -----------------------------------------------------------------------------
+//                     Interrupt Handlers End
+// -----------------------------------------------------------------------------

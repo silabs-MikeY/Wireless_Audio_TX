@@ -27,6 +27,10 @@ static console_tx_transfer_state_t console_tx_transfer_state = { 0 };
 static LDMA_TransferCfg_t console_tx_transfer_cfg;
 static LDMA_Descriptor_t console_tx_descriptor;
 
+// -----------------------------------------------------------------------------
+//                     Console TX Hardware Helpers
+// -----------------------------------------------------------------------------
+
 static void console_tx__enable_console_pins(void)
 {
   CMU_ClockEnable(cmuClock_GPIO, true);
@@ -73,6 +77,14 @@ static EUSART_TypeDef *console_tx__peripheral(void)
 #error "console_tx requires a supported EUSART/EUART LDMA TX signal"
 #endif
 
+// -----------------------------------------------------------------------------
+//                     Console TX Hardware Helpers End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Console TX DMA Transfer Helpers
+// -----------------------------------------------------------------------------
+
 static void console_tx__complete_transfer(console_tx_complete_callback_t callback,
                                           void *user_context)
 {
@@ -106,6 +118,14 @@ static void console_tx__start_next_chunk(EUSART_TypeDef *eusart)
 
   LDMA_StartTransfer((int)console_tx_ldma_channel, &console_tx_transfer_cfg, &console_tx_descriptor);
 }
+
+// -----------------------------------------------------------------------------
+//                     Console TX DMA Transfer Helpers End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Console TX General
+// -----------------------------------------------------------------------------
 
 bool console_tx__init(unsigned int ldma_channel)
 {
@@ -221,6 +241,14 @@ void console_tx__write_blocking(const char *text, size_t length)
   }
 }
 
+// -----------------------------------------------------------------------------
+//                     Console TX General End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Interrupt Handlers
+// -----------------------------------------------------------------------------
+
 void EUSART0_TX_IRQHandler(void)
 {
   EUSART_TypeDef *eusart = console_tx__peripheral();
@@ -254,4 +282,8 @@ void EUSART0_TX_IRQHandler(void)
 
   console_tx__complete_transfer(callback, user_context);
 }
+
+// -----------------------------------------------------------------------------
+//                     Interrupt Handlers End
+// -----------------------------------------------------------------------------
 #endif

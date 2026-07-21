@@ -58,7 +58,7 @@ set(TX_BOARD_LIBRARY_SOURCES
     "../libraries/adpcm.c"
     "../libraries/button.c"
     "../libraries/console_tx.c"
-    "../libraries/counters_new.c"
+    "../libraries/counters.c"
     "../libraries/events_print.c"
     "../libraries/generic.c"
     "../libraries/ldma_manager.c"
@@ -83,7 +83,14 @@ endforeach()
 
 list(FIND TX_BOARD_EXISTING_SOURCES "../timer_helper.c" root_timer_helper_index)
 list(FIND TX_BOARD_EXISTING_SOURCES "../libraries/timer_helper.c" library_timer_helper_index)
-if((root_timer_helper_index EQUAL -1) AND (library_timer_helper_index EQUAL -1))
+if(root_timer_helper_index GREATER -1)
+    list(REMOVE_ITEM TX_BOARD_EXISTING_SOURCES "../timer_helper.c")
+    get_target_property(TX_BOARD_COMPILE_SOURCES TX_Board SOURCES)
+    list(REMOVE_ITEM TX_BOARD_COMPILE_SOURCES "../timer_helper.c")
+    set_target_properties(TX_Board PROPERTIES SOURCES "${TX_BOARD_COMPILE_SOURCES}")
+endif()
+
+if(library_timer_helper_index EQUAL -1)
     target_sources(TX_Board PRIVATE "../libraries/timer_helper.c")
 endif()
 

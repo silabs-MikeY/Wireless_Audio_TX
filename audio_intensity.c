@@ -43,9 +43,21 @@ static bool library_initialized = false;
 // static uint32_t latest_audio_level_min_mv = 0;
 // static uint32_t latest_audio_level_max_mv = 0;
 
+// -----------------------------------------------------------------------------
+//                     Weak function implementations, do not rename.
+// -----------------------------------------------------------------------------
+
 __attribute__((weak)) uint32_t audio_intensity__get_microsecond_ticks(void) {
   return 0;
 }
+
+// -----------------------------------------------------------------------------
+//                     Weak function implementations End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Audio Intensity General
+// -----------------------------------------------------------------------------
 
 static void audio_intensity__update_counters(uint32_t intensity)
 {
@@ -323,3 +335,7 @@ void audio_intensity__reset_counters(void)
   audio_intensity_counter_values[AUDIO_INTENSITY_COUNTER_MIN] = 0;
   audio_intensity_counter_values[AUDIO_INTENSITY_COUNTER_AVERAGE] = 0;
 }
+
+// -----------------------------------------------------------------------------
+//                     Audio Intensity General End
+// -----------------------------------------------------------------------------

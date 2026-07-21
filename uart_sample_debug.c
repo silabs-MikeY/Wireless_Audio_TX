@@ -14,6 +14,10 @@ uint32_t uart_sample_debug__timestamp[BUFFER_COUNT] = {0};
 
 uint32_t buffer_index_in_transmit = 0xFFFFFFFF;
 
+// -----------------------------------------------------------------------------
+//                     Weak function implementations, do not rename.
+// -----------------------------------------------------------------------------
+
 __attribute__((weak)) uint32_t uart_sample_debug__get_microsecond_ticks(void) {
   assert(0); // This function should be implemented in the application to return the current microsecond ticks.
   return 0;
@@ -24,6 +28,14 @@ __attribute__((weak)) void uart_sample_debug__write_to_buffer(uint8_t *data, uin
   (void)length;
   assert(0); // This function should be implemented in the application to handle UART transmission.
 }
+
+// -----------------------------------------------------------------------------
+//                     Weak function implementations End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     UART Sample Debug General
+// -----------------------------------------------------------------------------
 
 void uart_sample_debug__flag_transmit_complete(void) {
   if (buffer_index_in_transmit < BUFFER_COUNT) {
@@ -140,3 +152,7 @@ void uart_sample_debug__check_for_new_data_and_transmit(void) {
     buffer_index_in_transmit = oldest_index;
   }
 }
+
+// -----------------------------------------------------------------------------
+//                     UART Sample Debug General End
+// -----------------------------------------------------------------------------

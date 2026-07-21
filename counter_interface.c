@@ -1,7 +1,7 @@
 #include "counter_interface.h"
 
 // #include "audio_buffers.h"
-#include "counters_new.h"
+#include "counters.h"
 #include "ADC.h"
 #include "audio_intensity.h"
 #include "app_process.h"
@@ -23,6 +23,10 @@ typedef struct counter_reset_s {
   void (*reset_counters)(void);
 } counter_reset_t;
 
+// -----------------------------------------------------------------------------
+//                     Counter Provider Helpers
+// -----------------------------------------------------------------------------
+
 static void counter_interface__register_provider(const counter_provider_t *provider)
 {
   for (uint32_t counter_index = 0; counter_index < provider->get_number_of_counters(); counter_index++)
@@ -41,6 +45,14 @@ static void counter_interface__reset_provider(const counter_reset_t *provider)
 {
   provider->reset_counters();
 }
+
+// -----------------------------------------------------------------------------
+//                     Counter Provider Helpers End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Counter Provider Tables
+// -----------------------------------------------------------------------------
 
 static const counter_provider_t counter_providers[] = {
   { scheduler__get_number_of_counters, scheduler__get_counter_name, scheduler__get_counter_address },
@@ -69,6 +81,13 @@ static const counter_reset_t counter_resets[] = {
   //{ tx_retry__reset_counters },
 };
 
+// -----------------------------------------------------------------------------
+//                     Counter Provider Tables End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Counter Interface General
+// -----------------------------------------------------------------------------
 
 bool counter_interface__init(void)
 {
@@ -83,6 +102,10 @@ void counter_interface__register_counters(void)
     counter_interface__register_provider(&counter_providers[provider_index]);
   }
 }
+
+// -----------------------------------------------------------------------------
+//                     Counter Interface General End
+// -----------------------------------------------------------------------------
 
 // -----------------------------------------------------------------------------
 //                     Weak function implementations, do not rename.

@@ -3,7 +3,7 @@
 #include "RGB.h"
 #include "microseconds.h"
 
-#include "counters_new.h"
+#include "counters.h"
 #include "em_wdog.h"
 #include <assert.h>
 #include <stdarg.h>
@@ -23,16 +23,11 @@ static const char *scheduler_counter_names[SCHEDULER_NUMBER_OF_COUNTERS] = {
     "ms_since_last_reset",
 };
 
-// volatile uint32_t millisecond_ticks = 0;
-
 bool tick_flag = false;
 
 static uint32_t countdown_5s = 5000;
 
 static void scheduler__reset_milliseconds(void);
-// bool tick_flag_10ms = false;
-// bool tick_flag_100ms = false
-// bool tick_flag_1s = false;
 
 typedef struct millisseconds_s {
   uint32_t current_millisecond_ticks;
@@ -40,12 +35,37 @@ typedef struct millisseconds_s {
 } millisseconds_t;
 millisseconds_t milliseconds;
 
+// -----------------------------------------------------------------------------
+//                     Weak function implementations, do not rename.
+// -----------------------------------------------------------------------------
+
 __attribute__((weak)) void scheduler__printf(bool add_timestamp,
                                              const char *format, ...) {
   (void)add_timestamp;
   (void)format;
   return;
 }
+
+__attribute__((weak)) void run_scheduler_1_ms(void) { return; }
+
+__attribute__((weak)) void run_scheduler_10_ms(void) { return; }
+
+__attribute__((weak)) void run_scheduler_100_ms(void) {
+  return;
+  // printf_to_buf_append_time(0,"Feed WDOG\n");
+}
+
+__attribute__((weak)) void run_scheduler_1s(void) {
+  // radio__validate_radio_statistics();
+}
+
+// -----------------------------------------------------------------------------
+//                     Weak function implementations End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Scheduler Counter Access
+// -----------------------------------------------------------------------------
 
 void scheduler__reset_milliseconds(void) {
   milliseconds.current_millisecond_ticks = 0;
@@ -88,6 +108,14 @@ void scheduler__reset_counters(void) {
   scheduler_counter_values[MS_SINCE_LAST_RESET] = 0;
 }
 
+// -----------------------------------------------------------------------------
+//                     Scheduler Counter Access End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Interrupt Handlers
+// -----------------------------------------------------------------------------
+
 void SysTick_Handler(void) {
   // non_volatile_millisecond_ticks++;
   // printf_to_buf_append_time(0,"tick :
@@ -95,6 +123,14 @@ void SysTick_Handler(void) {
   // microseconds__reset_micros_count();
   tick_flag = true;
 }
+
+// -----------------------------------------------------------------------------
+//                     Interrupt Handlers End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Scheduler General
+// -----------------------------------------------------------------------------
 
 void scheduler__deinit_SysTick(void) {
   scheduler__printf(true, "Starting SysTick DeInit\n");
@@ -114,19 +150,6 @@ bool scheduler__init_SysTick(void) {
   scheduler__reset_milliseconds();
   scheduler__printf(true, "Systick Started\n");
   return true;
-}
-
-__attribute__((weak)) void run_scheduler_1_ms(void) { return; }
-
-__attribute__((weak)) void run_scheduler_10_ms(void) { return; }
-
-__attribute__((weak)) void run_scheduler_100_ms(void) {
-  return;
-  // printf_to_buf_append_time(0,"Feed WDOG\n");
-}
-
-__attribute__((weak)) void run_scheduler_1s(void) {
-  // radio__validate_radio_statistics();
 }
 
 static void run_scheduler_5s(void) {
@@ -197,3 +220,7 @@ bool scheduler__run_scheduler(void) {
   }
   return false;
 }
+
+// -----------------------------------------------------------------------------
+//                     Scheduler General End
+// -----------------------------------------------------------------------------

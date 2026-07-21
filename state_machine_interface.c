@@ -6,7 +6,7 @@
 #include "audio_ring_buffer.h"
 #include "button.h"
 #include "counter_interface.h"
-#include "counters_new.h"
+#include "counters.h"
 #include "ldma_manager.h"
 #include "microseconds.h"
 #include "print_interfacing.h"
@@ -25,6 +25,10 @@ static bool state_machine__init_peripherals(void);
 static bool state_machine__de_init_peripherals(void);
 static unsigned int adc_ldma_channel_left = LDMA_MANAGER_INVALID_CHANNEL;
 static unsigned int adc_ldma_channel_right = LDMA_MANAGER_INVALID_CHANNEL;
+
+// -----------------------------------------------------------------------------
+//                     State Machine State Handlers
+// -----------------------------------------------------------------------------
 
 bool state_machine__process_state_init(states_t last_state) {
   if (last_state != INIT) {
@@ -62,6 +66,14 @@ bool state_machine__process_state_error(states_t last_state) {
   }
   return false;
 }
+
+// -----------------------------------------------------------------------------
+//                     State Machine State Handlers End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Peripheral Init / Deinit
+// -----------------------------------------------------------------------------
 
 static bool state_machine__init_peripherals(void) {
   print_interfacing__printf(0, false, "\n");
@@ -260,3 +272,7 @@ static bool state_machine__de_init_peripherals(void) {
   // CORE_EXIT_CRITICAL();
   return false;
 }
+
+// -----------------------------------------------------------------------------
+//                     Peripheral Init / Deinit End
+// -----------------------------------------------------------------------------

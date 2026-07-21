@@ -5,13 +5,23 @@
 #include "print.h"
 #include "print_interfacing.h"
 
+// -----------------------------------------------------------------------------
+//                     Weak function implementations, do not rename.
+// -----------------------------------------------------------------------------
+
 __attribute__((weak)) void generic__printf(bool add_timestamp, const char *format, ...)
 {
   (void)add_timestamp;
   (void)format;
 }
 
-//MEMCPY not volatile safe
+// -----------------------------------------------------------------------------
+//                     Weak function implementations End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Reset Cause Helpers
+// -----------------------------------------------------------------------------
 
 static BURAM_contents_t BURAM_contents[NUMBER_OF_BURTC_REGISTERS_USED];
 static const uint32_t BURAM_MAGIC_VALUE = 0x4255524Du;
@@ -208,6 +218,14 @@ void process_device_reset(void)
   }
 }
 
+// -----------------------------------------------------------------------------
+//                     Reset Cause Helpers End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Volatile Memory Helpers
+// -----------------------------------------------------------------------------
+
 /**
  * @brief Validates canary values in BURAM to detect memory corruption.
  * Checks both canary_before and canary_after fields in all BURAM entries.
@@ -370,3 +388,7 @@ void custom_assert(uint32_t counter, const char* file,uint32_t line)
   {
   }
 }
+
+// -----------------------------------------------------------------------------
+//                     Volatile Memory Helpers End
+// -----------------------------------------------------------------------------

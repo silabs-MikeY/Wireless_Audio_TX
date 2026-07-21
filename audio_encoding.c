@@ -20,6 +20,10 @@ static adpcm_context_t right_ctx = {.ch_count = 1, .adpcm_list = right_state};
 static uint8_t left_adpcm[ADPCM_OUT_BYTES];
 static uint8_t right_adpcm[ADPCM_OUT_BYTES];
 
+// -----------------------------------------------------------------------------
+//                     Audio Encoding Helpers
+// -----------------------------------------------------------------------------
+
 static uint8_t audio_encoding__get_adpcm_input_shift(void)
 {
   if (adc__get_sample_size_bytes() == 4)
@@ -128,6 +132,14 @@ static void audio_encoding__print_adpcm_diff(const char *channel_name,
               (long)max_abs_diff);
 }
 
+// -----------------------------------------------------------------------------
+//                     Audio Encoding Helpers End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Audio Encoding General
+// -----------------------------------------------------------------------------
+
 bool audio_encoding__init(void)
 {
   ADPCM_init(&left_ctx);
@@ -154,3 +166,7 @@ void audio_encoding__test_adpcm_right(uint8_t *buffer)
 
   audio_encoding__print_adpcm_diff("RIGHT", &right_ctx, buffer, right_adpcm);
 }
+
+// -----------------------------------------------------------------------------
+//                     Audio Encoding General End
+// -----------------------------------------------------------------------------

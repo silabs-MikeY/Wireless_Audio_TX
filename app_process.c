@@ -47,7 +47,7 @@
 #include "scheduler.h"
 #include "sl_rail_util_init.h"
 // #include "radio.h"
-#include "counters_new.h"
+#include "counters.h"
 #include "generic.h"
 #include "radio_packet_buffers.h"
 #include "radio_statistics.h"

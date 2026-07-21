@@ -1,5 +1,5 @@
-#ifndef COUNTERS_NEW_H
-#define COUNTERS_NEW_H
+#ifndef COUNTERS_H
+#define COUNTERS_H
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -15,7 +15,6 @@ void counters__pre_save_hook(void);
 void counters__run_print_state_machine(void);
 void counters__post_print_hook(void);
 
-// uint32_t counters_new__get_counter_value(uint32_t counter_index);
 int32_t counters__register_counter(const char* input_counter_name, uint32_t* input_counter_address);
 bool counters__init(void);
 bool counters__get_non_volatile_counters_array(uint32_t* counters_array, uint32_t* array_size);
@@ -27,4 +26,4 @@ void counters__save_and_print_counters(uint32_t current_timestamp);
 #define COUNTER_FULL_PRINT_INTERVAL_SNAPSHOTS 10
 
 
-#endif // COUNTERS_NEW_H
+#endif // COUNTERS_H

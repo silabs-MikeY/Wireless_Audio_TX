@@ -11,11 +11,41 @@ volatile bool first_packet_received_flag = false;
 
 volatile bool force_error_flag = false;
 
+// -----------------------------------------------------------------------------
+//                     Weak function implementations, do not rename.
+// -----------------------------------------------------------------------------
+
 __attribute__((weak)) void state_machine__printf(bool add_timestamp, const char *format, ...)
 {
     (void)add_timestamp;
     (void)format;
 }
+
+__attribute__((weak)) bool state_machine__process_state_running(states_t last_state)
+{
+  (void)last_state;
+  return false;
+}
+
+__attribute__((weak)) bool state_machine__process_state_init(states_t last_state)
+{
+  (void)last_state;
+  return false;
+}
+
+__attribute__((weak)) bool state_machine__process_state_error(states_t last_state)
+{
+  (void)last_state;
+  return false;
+}
+
+// -----------------------------------------------------------------------------
+//                     Weak function implementations End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     State Machine General
+// -----------------------------------------------------------------------------
 
 bool state_machine__run_state_machine(void)
 {
@@ -66,24 +96,6 @@ bool state_machine__run_state_machine(void)
   return false;
 }
 
-__attribute__((weak)) bool state_machine__process_state_running(states_t last_state)
-{
-  (void)last_state;
-  return false;
-}
-
-__attribute__((weak)) bool state_machine__process_state_init(states_t last_state)
-{
-  (void)last_state;
-  return false;
-}
-
-__attribute__((weak)) bool state_machine__process_state_error(states_t last_state)
-{
-  (void)last_state;
-  return false;
-}
-
 states_t state_machine__get_state(void)
 {
   return state;
@@ -105,3 +117,7 @@ void state_machine__force_state_machine_error(void)
 
   // CORE_EXIT_CRITICAL();
 }
+
+// -----------------------------------------------------------------------------
+//                     State Machine General End
+// -----------------------------------------------------------------------------

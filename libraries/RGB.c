@@ -25,6 +25,10 @@ static radio_blink_state_change_t on_off_timestamps[20];
 static uint32_t next_timestamp_index = 0;
 static bool rgb__init_done = false;
 
+// -----------------------------------------------------------------------------
+//                     RGB Radio Status Blink
+// -----------------------------------------------------------------------------
+
 void rgb__start_radio_status_blink_force(void)
 {
   rgb__start_radio_status_blink(scheduler__get_millisecond_ticks());
@@ -118,6 +122,14 @@ void rgb__radio_blink_turn_on(void)
     rgb__set_rgb_out(1, red, true, 0x7F);
   }
 }
+
+// -----------------------------------------------------------------------------
+//                     RGB Radio Status Blink End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     RGB General
+// -----------------------------------------------------------------------------
 
 bool rgb__timer_init(void)
 {
@@ -317,3 +329,7 @@ void rgb__set_rgb_out(uint8_t RGB_number, color_t color, bool clear_other_colors
   TIMER_CompareSet(TIMER_peripheral, 2, blue_duty);
 
 }
+
+// -----------------------------------------------------------------------------
+//                     RGB General End
+// -----------------------------------------------------------------------------

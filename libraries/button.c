@@ -6,6 +6,10 @@
 
 #include <stdbool.h>
 
+// -----------------------------------------------------------------------------
+//                     Weak function implementations, do not rename.
+// -----------------------------------------------------------------------------
+
 __attribute__((weak)) void button__printf(bool add_timestamp, const char *format, ...)
 {
   (void)add_timestamp;
@@ -19,6 +23,14 @@ __attribute__((weak)) void button__rising_edge(void)
 __attribute__((weak)) void button__falling_edge(void)
 {
 }
+
+// -----------------------------------------------------------------------------
+//                     Weak function implementations End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Button General
+// -----------------------------------------------------------------------------
 
 void button_callback(uint8_t int_no, void *context);
 
@@ -86,3 +98,7 @@ void button__deinit(void)
 
   (void)sl_gpio_deconfigure_external_interrupt(button_interrupt_number);
 }
+
+// -----------------------------------------------------------------------------
+//                     Button General End
+// -----------------------------------------------------------------------------

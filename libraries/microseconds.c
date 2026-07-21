@@ -1,11 +1,18 @@
 #include "microseconds.h"
 
+// -----------------------------------------------------------------------------
+//                     Weak function implementations, do not rename.
+// -----------------------------------------------------------------------------
+
 __attribute__((weak)) void microseconds__printf(bool add_timestamp, const char *format, ...)
 {
     (void)add_timestamp;
     (void)format;
 }
 
+// -----------------------------------------------------------------------------
+//                     Weak function implementations End
+// -----------------------------------------------------------------------------
 
 typedef enum microseconds_counter_index_s {
   MICROSECONDS_SINCE_LAST_RESET = 0,
@@ -16,6 +23,10 @@ static volatile uint32_t microseconds_counter_values[MICROSECONDS_NUMBER_OF_COUN
 static const char *microseconds_counter_names[MICROSECONDS_NUMBER_OF_COUNTERS] = {
     "micro_ticks_since_last_reset",
 };
+
+// -----------------------------------------------------------------------------
+//                     Microsecond Counter Access
+// -----------------------------------------------------------------------------
 
 /**
  * @brief Gets the current microsecond counter value.
@@ -100,6 +111,14 @@ void microseconds__reset_counters(void)
 {
     microseconds_counter_values[MICROSECONDS_SINCE_LAST_RESET] = 0;
 }
+
+// -----------------------------------------------------------------------------
+//                     Microsecond Counter Access End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Microsecond Timer General
+// -----------------------------------------------------------------------------
 
 /**
  * @brief De-initializes the microsecond timer system.
@@ -473,3 +492,7 @@ void microseconds__deinit(void)
     TIMER_Reset(MICROS_TICK_TIMER);
     TIMER_Reset(MICROS_COUNT_TIMER);
 }
+
+// -----------------------------------------------------------------------------
+//                     Microsecond Timer General End
+// -----------------------------------------------------------------------------

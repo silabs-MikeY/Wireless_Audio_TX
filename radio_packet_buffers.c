@@ -13,11 +13,23 @@ bool radio__try_to_send_a_packet_by_index(uint32_t index_to_send);
 packet_buffer_t radio_tx_packet_buffer[NUMBER_OF_PACKET_BUFFERS];
 uint32_t packet_buffer_head;
 
+// -----------------------------------------------------------------------------
+//                     Weak function implementations, do not rename.
+// -----------------------------------------------------------------------------
+
 __attribute__((weak)) void radio_packet_buffers__printf(bool add_timestamp, const char *format, ...)
 {
   (void)add_timestamp;
   (void)format;
 }
+
+// -----------------------------------------------------------------------------
+//                     Weak function implementations End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Radio Packet Buffer General
+// -----------------------------------------------------------------------------
 
 bool radio_packet_buffers__init(void)
 {
@@ -35,6 +47,14 @@ const packet_buffer_t *radio_packet_buffers__get_packet_buffer(uint32_t packet_b
 
   return &radio_tx_packet_buffer[packet_buffer_index];
 }
+
+// -----------------------------------------------------------------------------
+//                     Radio Packet Buffer General End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Radio Packet Buffer Selection
+// -----------------------------------------------------------------------------
 
 void radio_packet_buffers__get_oldest_packet_to_send(packet_buffer_t **packet_buffer, uint32_t *packet_buffer_index)
 {
@@ -102,6 +122,14 @@ bool radio_packet_buffers__request_available_packet_buffer(packet_buffer_t **pac
   return false;
 }
 
+// -----------------------------------------------------------------------------
+//                     Radio Packet Buffer Selection End
+// -----------------------------------------------------------------------------
+
+// -----------------------------------------------------------------------------
+//                     Radio Packet Buffer State
+// -----------------------------------------------------------------------------
+
 bool radio_packet_buffers__mark_packet_buffer_used(uint32_t packet_buffer_index)
 {
   if (packet_buffer_index >= NUMBER_OF_PACKET_BUFFERS)
@@ -128,6 +156,10 @@ bool radio_packet_buffers__mark_packet_buffer_used(uint32_t packet_buffer_index)
 
   return true;
 }
+
+// -----------------------------------------------------------------------------
+//                     Radio Packet Buffer State End
+// -----------------------------------------------------------------------------
 
 bool radio_packet_buffers__mark_packet_buffer_send_attempted(uint32_t packet_buffer_index)
 {
