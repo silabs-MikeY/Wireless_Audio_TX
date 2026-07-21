@@ -4,6 +4,21 @@
 #include <stdint.h>
 #include <string.h>
 
+#define AUDIO_RING_BUFFER_SIZE_BYTES 4096
+
+uint8_t left_audio_ring_buffer[AUDIO_RING_BUFFER_SIZE_BYTES];
+uint8_t right_audio_ring_buffer[AUDIO_RING_BUFFER_SIZE_BYTES];
+
+uint32_t left_audio_ring_buffer_head = 0;
+uint32_t right_audio_ring_buffer_head = 0;
+uint32_t left_audio_ring_buffer_tail = 0;
+uint32_t right_audio_ring_buffer_tail = 0;
+static uint32_t left_audio_ring_buffer_bytes_used = 0;
+static uint32_t right_audio_ring_buffer_bytes_used = 0;
+
+static bool stereo_flag = false;
+static bool encoder_enabled = false;
+
 // -----------------------------------------------------------------------------
 //                     Exported Counters
 // -----------------------------------------------------------------------------
@@ -31,6 +46,9 @@ static const char *ring_buffer_counter_names[RING_BUFFER_NUMBER_OF_COUNTERS] = {
     "ring_buffer_left_buffer_used_max", "ring_buffer_right_buffer_used_max",
     "ring_buffer_left_buffer_used_min", "ring_buffer_right_buffer_used_min"};
 
+static void ring_buffer__update_left_used_counters(void);
+static void ring_buffer__update_right_used_counters(void);
+
 uint32_t ring_buffer__get_number_of_counters(void) {
   return RING_BUFFER_NUMBER_OF_COUNTERS;
 }
@@ -51,8 +69,53 @@ volatile uint32_t *ring_buffer__get_counter_address(uint32_t counter_index) {
 void ring_buffer__reset_counters(void) {
   for (uint32_t i = 0; i < RING_BUFFER_NUMBER_OF_COUNTERS; i++) {
     ring_buffer_counter_values[i] = 0;
-    ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED_MIN] = 0xFFFFFFFF;
-    ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED_MIN] = 0xFFFFFFFF;
+  }
+
+  ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED] =
+      left_audio_ring_buffer_bytes_used;
+  ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED] =
+      right_audio_ring_buffer_bytes_used;
+  ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED_MIN] =
+      left_audio_ring_buffer_bytes_used;
+  ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED_MIN] =
+      right_audio_ring_buffer_bytes_used;
+  ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED_MAX] =
+      left_audio_ring_buffer_bytes_used;
+  ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED_MAX] =
+      right_audio_ring_buffer_bytes_used;
+}
+
+static void ring_buffer__update_left_used_counters(void) {
+  ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED] =
+      left_audio_ring_buffer_bytes_used;
+
+  if (left_audio_ring_buffer_bytes_used <
+      ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED_MIN]) {
+    ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED_MIN] =
+        left_audio_ring_buffer_bytes_used;
+  }
+
+  if (left_audio_ring_buffer_bytes_used >
+      ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED_MAX]) {
+    ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED_MAX] =
+        left_audio_ring_buffer_bytes_used;
+  }
+}
+
+static void ring_buffer__update_right_used_counters(void) {
+  ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED] =
+      right_audio_ring_buffer_bytes_used;
+
+  if (right_audio_ring_buffer_bytes_used <
+      ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED_MIN]) {
+    ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED_MIN] =
+        right_audio_ring_buffer_bytes_used;
+  }
+
+  if (right_audio_ring_buffer_bytes_used >
+      ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED_MAX]) {
+    ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED_MAX] =
+        right_audio_ring_buffer_bytes_used;
   }
 }
 
@@ -60,22 +123,7 @@ void ring_buffer__reset_counters(void) {
 //                     Exported Counters End
 // -----------------------------------------------------------------------------
 
-#define AUDIO_RING_BUFFER_SIZE_BYTES 4096
-
-uint8_t left_audio_ring_buffer[AUDIO_RING_BUFFER_SIZE_BYTES];
-uint8_t right_audio_ring_buffer[AUDIO_RING_BUFFER_SIZE_BYTES];
-
-uint32_t left_audio_ring_buffer_head = 0;
-uint32_t right_audio_ring_buffer_head = 0;
-uint32_t left_audio_ring_buffer_tail = 0;
-uint32_t right_audio_ring_buffer_tail = 0;
-static uint32_t left_audio_ring_buffer_bytes_used = 0;
-static uint32_t right_audio_ring_buffer_bytes_used = 0;
-
-static bool stereo_flag = false;
-static bool encoder_enabled = false;
-
-void ring_buffer__init(bool is_stereo, bool enable_encoder) {
+bool ring_buffer__init(bool is_stereo, bool enable_encoder) {
   stereo_flag = is_stereo;
   encoder_enabled = enable_encoder;
   memset(left_audio_ring_buffer, 0, AUDIO_RING_BUFFER_SIZE_BYTES);
@@ -86,6 +134,7 @@ void ring_buffer__init(bool is_stereo, bool enable_encoder) {
   right_audio_ring_buffer_tail = 0;
   left_audio_ring_buffer_bytes_used = 0;
   right_audio_ring_buffer_bytes_used = 0;
+  return true;
 }
 
 uint16_t ring_buffer__trigger(void) {
@@ -163,12 +212,7 @@ bool ring_buffer__build_radio_packet_from_ring_buffer(
     left_audio_ring_buffer_bytes_used -= RADIO_DATA_BYTES_PER_CHANNEL;
     ring_buffer_counter_values[RING_BUFFER_LEFT_BYTES_OUT] +=
       RADIO_DATA_BYTES_PER_CHANNEL;
-
-    if (left_audio_ring_buffer_bytes_used <
-        ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED_MIN]) {
-      ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED_MIN] =
-          left_audio_ring_buffer_bytes_used;
-    }
+    ring_buffer__update_left_used_counters();
 
     // Copy right channel data
     if (right_audio_ring_buffer_head < right_audio_ring_buffer_tail) {
@@ -200,12 +244,7 @@ bool ring_buffer__build_radio_packet_from_ring_buffer(
     right_audio_ring_buffer_bytes_used -= RADIO_DATA_BYTES_PER_CHANNEL;
     ring_buffer_counter_values[RING_BUFFER_RIGHT_BYTES_OUT] +=
       RADIO_DATA_BYTES_PER_CHANNEL;
-
-    if (right_audio_ring_buffer_bytes_used <
-        ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED_MIN]) {
-      ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED_MIN] =
-          right_audio_ring_buffer_bytes_used;
-    }
+    ring_buffer__update_right_used_counters();
   } else {
     // Copy mono data (right channel)
     if (right_audio_ring_buffer_head < right_audio_ring_buffer_tail) {
@@ -236,12 +275,7 @@ bool ring_buffer__build_radio_packet_from_ring_buffer(
     right_audio_ring_buffer_bytes_used -= RADIO_DATA_BYTES_TOTAL;
     ring_buffer_counter_values[RING_BUFFER_RIGHT_BYTES_OUT] +=
       RADIO_DATA_BYTES_TOTAL;
-
-    if (right_audio_ring_buffer_bytes_used <
-        ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED_MIN]) {
-      ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED_MIN] =
-          right_audio_ring_buffer_bytes_used;
-    }
+    ring_buffer__update_right_used_counters();
   }
 
   return true;
@@ -309,21 +343,10 @@ void ring_buffer__copy_data_into_ring_buffer(uint8_t *input_data,
     }
   }
 
-  if (right_data) 
-  {
-    ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED] = right_audio_ring_buffer_bytes_used;
-    if (right_audio_ring_buffer_bytes_used > ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED_MAX]) 
-    {
-      ring_buffer_counter_values[RING_BUFFER_RIGHT_BUFFER_USED_MAX] = right_audio_ring_buffer_bytes_used;
-    }
-  } 
-  else 
-  {
-    ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED] = left_audio_ring_buffer_bytes_used;
-    if (left_audio_ring_buffer_bytes_used > ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED_MAX]) 
-    {
-      ring_buffer_counter_values[RING_BUFFER_LEFT_BUFFER_USED_MAX] = left_audio_ring_buffer_bytes_used;
-    }
+  if (right_data) {
+    ring_buffer__update_right_used_counters();
+  } else {
+    ring_buffer__update_left_used_counters();
   }
 
   ring_buffer_counter_values[right_data ? RING_BUFFER_RIGHT_BYTES_IN

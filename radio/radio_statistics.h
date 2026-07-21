@@ -78,7 +78,7 @@ static const mono_stereo_radio_config_values_t stereo_config = {
 void radio_statistics__reset_radio_statistics_for_new_measurement(void);
 void radio_statistics__prepare_counters_for_print(void);
 bool radio_statistics__note_successful_tx(uint32_t sequence_number, uint32_t timestamp_of_tx);
-void radio_statistics__init(void);
+bool radio_statistics__init(void);
 void radio_statistics__get_min_and_max_transmit_deltas(uint32_t* delta_min, uint32_t* delta_max);
 void radio_statistics__get_number_of_transmits_processed(uint32_t* number_of_transmits_processed);
 void radio_statistics__set_audio_mode(bool is_stereo, bool encoder_enabled);

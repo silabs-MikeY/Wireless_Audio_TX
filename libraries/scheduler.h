@@ -8,7 +8,7 @@
 uint32_t scheduler__get_millisecond_ticks(void);
 uint32_t scheduler__get_microsecond_ticks(void);
 bool scheduler__run_scheduler(void);
-void scheduler__init_SysTick(void);
+bool scheduler__init_SysTick(void);
 void scheduler__deinit_SysTick(void);
 void scheduler__reset_5s_countdown(void);
 void scheduler__update_millis(void);

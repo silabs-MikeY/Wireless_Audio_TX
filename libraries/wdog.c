@@ -21,7 +21,7 @@ void WDOG0_IRQHandler(void)
   wdog__on_irq();
 }
 
-void wdog__init(void)
+bool wdog__init(void)
 {
   if (!(CMU->CLKEN1 & CMU_CLKEN1_WDOG1))
   {
@@ -51,4 +51,5 @@ void wdog__init(void)
 
     WDOGn_Lock(WDOG0);
   }
+  return true;
 }

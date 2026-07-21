@@ -119,38 +119,38 @@ void rgb__radio_blink_turn_on(void)
   }
 }
 
-void rgb__timer_init(void)
+bool rgb__timer_init(void)
 {
   if (RGB1_TIMER == RGB2_TIMER)
   {
     debug__printf_to_buf_append_time(0, "Can't use the same timer for RGB1 and RGB2\n");
-    assert(0);
+    return false;
   }
 
   if (timers__init_timer_cmu(RGB1_TIMER) == false)
   {
     debug__printf_to_buf_append_time(0, "Bad RGB1_TIMER choice\n");
-    assert(0);
+    return false;
   }
 
   if (timers__init_timer_cmu(RGB2_TIMER) == false)
   {
     debug__printf_to_buf_append_time(0, "Bad RGB2_TIMER choice\n");
-    assert(0);
+    return false;
   }
 
   uint32_t RGB1_timer_index = timers__get_timer_index(RGB1_TIMER);
   if (RGB1_timer_index == 0xFFFFFFFF)
   {
     debug__printf_to_buf_append_time(0, "Invalid RGB1 index\n");
-    assert(0);
+    return false;
   }
 
   uint32_t RGB2_timer_index = timers__get_timer_index(RGB2_TIMER);
   if (RGB2_timer_index == 0xFFFFFFFF)
   {
     debug__printf_to_buf_append_time(0, "Invalid RGB2 index\n");
-    assert(0);
+    return false;
   }
 
   TIMER_Init_TypeDef timerInit = TIMER_INIT_DEFAULT;
@@ -224,9 +224,10 @@ void rgb__timer_init(void)
   RGB2_TIMER->CC[0].OCB = 0;
   RGB2_TIMER->CC[1].OCB = 0;
   RGB2_TIMER->CC[2].OCB = 0;
+  return true;
 }
 
-void rgb__init(void)
+bool rgb__init(void)
 {
   CMU_ClockEnable(cmuClock_GPIO, true);
 
@@ -237,7 +238,9 @@ void rgb__init(void)
   GPIO_PinModeSet(RGB2_GREEN_PORT, RGB2_GREEN_PIN, gpioModePushPull, 0);
   GPIO_PinModeSet(RGB2_BLUE_PORT, RGB2_BLUE_PIN, gpioModePushPull, 0);
 
-   rgb__timer_init();
+  if (!rgb__timer_init()) {
+    return false;
+  }
 
 #if (RGB2_STARTUP_TEST == 1)
   // rgb__set_rgb_out(1, green, true, 0x7F);
@@ -249,6 +252,7 @@ void rgb__init(void)
   // CORE_ENTER_CRITICAL();
   rgb__set_rgb_out(1, white, true, 0x7F);
   rgb__set_rgb_out(2, white, true, 0x7F);
+  return true;
 }
 
 void rgb__deinit(void)

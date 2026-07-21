@@ -29,13 +29,12 @@
  ******************************************************************************/
 
 #include "app_init.h"
-#include "sl_iostream.h"
-#include "sl_iostream_handles.h"
 #include "sl_rail_util_init.h"
 #include "state_machine.h"
 #include "generic.h"
 #include "print_interfacing.h"
 #include "rail.h"
+#include "ldma_manager.h"
 
 volatile uint32_t msTicks = 0;
 uint32_t get_msTicks(void)
@@ -43,9 +42,6 @@ uint32_t get_msTicks(void)
   return msTicks;
 }
 volatile uint32_t one_second_tick = 0;
-//extern sl_iostream_t *sl_iostream_vcom_handle;
-extern sl_iostream_t *sl_iostream_inst_handle;
-
 // -----------------------------------------------------------------------------
 //                              Macros and Typedefs
 // -----------------------------------------------------------------------------
@@ -86,6 +82,8 @@ extern sl_iostream_t *sl_iostream_inst_handle;
 //                                Static Variables
 // -----------------------------------------------------------------------------
 
+static unsigned int console_tx_ldma_channel = LDMA_MANAGER_INVALID_CHANNEL;
+
 // -----------------------------------------------------------------------------
 //                          Public Function Definitions
 // -----------------------------------------------------------------------------
@@ -96,23 +94,29 @@ extern sl_iostream_t *sl_iostream_inst_handle;
 RAIL_Handle_t app_init(void)
 {
   // Get RAIL handle, used later by the application
-  RAIL_Handle_t rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_INST);
+  RAIL_Handle_t rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_RAIL_HANDLE_INST);
 
   /////////////////////////////////////////////////////////////////////////////
   // Put your application init code here!                                    //
   // This is called once during start-up.                                    //
   /////////////////////////////////////////////////////////////////////////////
 
+  if (!ldma_manager__init()) {
+    return rail_handle;
+  }
+  if (!ldma_manager__allocate(&console_tx_ldma_channel)) {
+    return rail_handle;
+  }
+
+  if (!print_interfacing__init(console_tx_ldma_channel)) {
+    return rail_handle;
+  }
+
+  print_interfacing__printf_static_string(0, false, "\n----------\nTransmit Application Start\n----------\n");
   process_device_reset();
-
-  sl_iostream_set_default(sl_iostream_get_handle("inst"));
-  print_interfacing__init();
-
-  // printf("\n\n\nTransmit Application Start\n\n\n");
-  print_interfacing__printf_static_string(0, true, "\n\n\nTransmit Application Start\n\n\n");
+  print_interfacing__flush_blocking();
 
   state_machine__run_state_machine();
-
   return rail_handle;
 }
 

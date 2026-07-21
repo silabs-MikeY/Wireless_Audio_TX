@@ -8,16 +8,20 @@
 #include "radio_base.h"
 #include "counters_new.h"
 #include "scheduler.h"
-#include "sl_iostream.h"
+#include "libraries/console_tx.h"
 #include "uart_sample_debug.h"
 #include <string.h>
 #include <stdbool.h>
+#include <stdint.h>
 
-static sl_iostream_t *print_interfacing__console = NULL;
-
-void print_interfacing__init(void)
+static void print_interfacing__console_tx_complete(void *user_context)
 {
-  print_interfacing__console = sl_iostream_get_default();
+  debug__mark_print_buffer_reusable((uint8_t)(uintptr_t)user_context);
+}
+
+bool print_interfacing__init(unsigned int ldma_channel)
+{
+  return console_tx__init(ldma_channel);
 }
 
 void print_interfacing__emit_text(const char *text)
@@ -27,12 +31,49 @@ void print_interfacing__emit_text(const char *text)
     return;
   }
 
-  if (print_interfacing__console == NULL)
+  printf_to_buf_string(0, text);
+}
+
+bool print_interfacing__process(void)
+{
+  const char *text = NULL;
+  size_t length = 0U;
+  uint8_t buffer_index = NUMBER_OF_PRINT_BUFFERS;
+
+  if (console_tx__busy())
   {
-    return;
+    return false;
   }
 
-  sl_iostream_write(print_interfacing__console, (uint8_t *)text, strlen(text));
+  if (!debug__get_oldest_print_buffer(&text, &length, &buffer_index))
+  {
+    return false;
+  }
+
+  if (length == 0U)
+  {
+    debug__mark_print_buffer_reusable(buffer_index);
+    return true;
+  }
+
+  if (!console_tx__print(text,
+                         length,
+                         print_interfacing__console_tx_complete,
+                         (void *)(uintptr_t)buffer_index))
+  {
+    debug__mark_print_buffer_pending(buffer_index);
+    return false;
+  }
+
+  return true;
+}
+
+void print_interfacing__flush_blocking(void)
+{
+  while (console_tx__busy() || !debug__print_buffers_empty())
+  {
+    (void)print_interfacing__process();
+  }
 }
 
 static void print_interfacing__vprintf(bool add_timestamp, bool print_immediately, const char *format, va_list args)
@@ -49,18 +90,7 @@ static void print_interfacing__vprintf(bool add_timestamp, bool print_immediatel
 
   vsnprintf(formatted_text, sizeof(formatted_text), format, args);
 
-#if (DEBUG_PRINT_TO_BUFFERS == 1)
-  if (print_immediately)
-  {
-    print_interfacing__emit_text(formatted_text);
-  }
-  else
-  {
-    printf_to_buf_string(0, formatted_text);
-  }
-#else
-  print_interfacing__emit_text(formatted_text);
-#endif
+  printf_to_buf_string(0, formatted_text);
 }
 
 void print_interfacing__printf(bool add_timestamp, bool print_immediately, const char *format, ...)
@@ -80,18 +110,7 @@ void print_interfacing__printf_static_string(bool add_timestamp, bool print_imme
     assert(0);
   }
 
-  #if (DEBUG_PRINT_TO_BUFFERS == 1)
-  if (print_immediately)
-  {
-    print_interfacing__emit_text(counter_string);
-  }
-  else
-  {
-    printf_to_buf_static_string(0, counter_string);
-  }
-  #else
-    print_interfacing__emit_text(counter_string);
-  #endif
+  printf_to_buf_static_string(0, counter_string);
 }
 
 void print_interfacing__printf_volatile_string(bool add_timestamp, bool print_immediately, const char *counter_string)
@@ -103,18 +122,7 @@ void print_interfacing__printf_volatile_string(bool add_timestamp, bool print_im
     assert(0);
   }
 
-  #if (DEBUG_PRINT_TO_BUFFERS == 1)
-  if (print_immediately)
-  {
-    print_interfacing__emit_text(counter_string);
-  }
-  else
-  {
-    printf_to_buf_string(0, counter_string);
-  }
-  #else
-    print_interfacing__emit_text(counter_string);
-  #endif
+  printf_to_buf_string(0, counter_string);
 }
 
 
@@ -146,7 +154,6 @@ DEFINE_PRINT_INTERFACING_WRAPPER(state_machine__printf)
 
 #undef DEFINE_PRINT_INTERFACING_WRAPPER
 
-// Never buffer WDOG prints, as they are critical for debugging and should be output immediately.
 void wdog__printf(bool add_timestamp, const char *format, ...)
 {
   char formatted_text[128];
@@ -157,7 +164,7 @@ void wdog__printf(bool add_timestamp, const char *format, ...)
   va_start(args, format);
   vsnprintf(formatted_text, sizeof(formatted_text), format, args);
   va_end(args);
-  print_interfacing__emit_text(formatted_text);
+  printf_to_buf_string(0, formatted_text);
 }
 
 void counters__printf_static_string(bool add_timestamp, const char *counter_string)
@@ -180,15 +187,17 @@ void debug__write_console_text(const char *text)
         return;
     }
 
-    print_interfacing__emit_text(text);
-    //printf("%s", text);
+    printf_to_buf_string(0, text);
 }
 
 void uart_sample_debug__write_to_buffer(uint8_t *data, uint32_t length)
 {
-  (void)data;
-  (void)length;
-  sl_iostream_write(print_interfacing__console, data, length);
+  if ((data == NULL) || (length == 0U))
+  {
+    return;
+  }
+
+  printf_to_buf_array(data, length, false);
 }
 
 // -----------------------------------------------------------------------------

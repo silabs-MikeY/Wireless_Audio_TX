@@ -26,7 +26,7 @@
                 "/Users/miyablon/SimplicityStudio/v6_workspace/TX_Board/cmake_gcc/build/base/TX_Board.hex",
                 "--halt",
                 "--serialno",
-                "440305682",
+                "440267889",
                 "--device",
                 "EFR32MG24B220F1536IM48"
             ]

@@ -19,10 +19,11 @@ __attribute__((weak)) void radio_packet_buffers__printf(bool add_timestamp, cons
   (void)format;
 }
 
-void radio_packet_buffers__init(void)
+bool radio_packet_buffers__init(void)
 {
   memset(radio_tx_packet_buffer, 0, sizeof(radio_tx_packet_buffer));
   packet_buffer_head = 0;
+  return true;
 }
 
 const packet_buffer_t *radio_packet_buffers__get_packet_buffer(uint32_t packet_buffer_index)

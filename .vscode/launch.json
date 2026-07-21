@@ -42,7 +42,7 @@
             "executable": "/Users/miyablon/SimplicityStudio/v6_workspace/TX_Board/cmake_gcc/build/base/TX_Board.out",
             "preLaunchTask": "TX_Board_silabs_debug:default_config_combined",
             "breakAfterReset": true,
-            "serialNumber": "440305682",
+            "serialNumber": "440267889",
             "overrideLaunchCommands": [
                 "exec-file /Users/miyablon/SimplicityStudio/v6_workspace/TX_Board/cmake_gcc/build/base/TX_Board.out",
                 "symbol-file /Users/miyablon/SimplicityStudio/v6_workspace/TX_Board/cmake_gcc/build/base/TX_Board.out"

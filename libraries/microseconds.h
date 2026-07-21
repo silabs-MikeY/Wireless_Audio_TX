@@ -19,7 +19,7 @@ void microseconds__printf(bool add_timestamp, const char *format, ...);
 uint32_t microseconds__get_micros_count(void);
 void microseconds__reset_counters(void);
 void microseconds__deinit_microsecond(void);
-void microseconds__init_microsecond(void);
-void microseconds__init_microsecond_count(void);
+bool microseconds__init_microsecond(void);
+bool microseconds__init_microsecond_count(void);
 
 #endif /* RADIO_H_ */

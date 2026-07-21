@@ -1,47 +1,30 @@
-#eyJzdGF0ZSI6eyJidWlsZFByZXNldHMiOnsiZGVmYXVsdF9jb25maWciOnsibmFtZSI6ImRlZmF1bHRfY29uZmlnIiwiY29uZmlndXJhdGlvbiI6ImJhc2UiLCJkZWZpbml0aW9ucyI6W10sInJlbW92ZWRGbGFncyI6eyJDIjpbIi1PZyJdLCJDWFgiOlsiLU9nIl0sIkFTTSI6W119LCJhZGRpdGlvbmFsRmxhZ3MiOnsiQyI6WyItTzAiXSwiQ1hYIjpbIi1PMCJdLCJBU00iOltdfX19LCJjdXJyZW50Q29uZkluZGV4IjowfSwiZm9sZGVycyI6WyJyYWRpbyJdLCJmaWxlcyI6W119
+#eyJzdGF0ZSI6eyJidWlsZFByZXNldHMiOnsiZGVmYXVsdF9jb25maWciOnsibmFtZSI6ImRlZmF1bHRfY29uZmlnIiwiY29uZmlndXJhdGlvbiI6ImJhc2UiLCJhZGRpdGlvbmFsRGVmaW5pdGlvbnMiOltdLCJyZW1vdmVkRGVmaW5pdGlvbnMiOltdLCJyZW1vdmVkRmxhZ3MiOnsiQyI6WyItT2ciXSwiQ1hYIjpbIi1PZyJdLCJBU00iOltdfSwiYWRkaXRpb25hbEZsYWdzIjp7IkMiOlsiLU8wIl0sIkNYWCI6WyItTzAiXSwiQVNNIjpbXX19fSwiY3VycmVudENvbmZJbmRleCI6MH0sImZvbGRlcnMiOlsicmFkaW8iXSwiZmlsZXMiOltdfQ==
 include_directories(
-	"../libraries"
 	"../radio"
 )
 
 target_sources(TX_Board PRIVATE
-	"../libraries/ADC.c"
+	"../audio_encoding.c"
+	"../audio_intensity.c"
+	"../audio_pipeline.c"
 	"../audio_ring_buffer.c"
-	"../libraries/RGB.c"
-	"../libraries/VDAC.c"
-	"../libraries/adpcm.c"
-	"../libraries/button.c"
-	"../libraries/counters_new.c"
-	"../libraries/events_print.c"
-	"../libraries/generic.c"
-	"../libraries/microseconds.c"
-	"../libraries/print.c"
+	"../counter_interface.c"
 	"../print_interfacing.c"
-	"../libraries/scheduler.c"
+	"../radio_packet_buffers.c"
 	"../state_machine.c"
-	"../libraries/timer_helper.c"
-	"../libraries/wdog.c"
+	"../state_machine_interface.c"
+	"../timer_helper.c"
+	"../uart_sample_debug.c"
+	"../ui_interfacing.c"
 	"../radio/radio_base.c"
 	"../radio/radio_receive.c"
 	"../radio/radio_retry.c"
-	"../radio/tx_retry.c"
 	"../radio/radio_statistics.c"
 	"../radio/radio_transmit.c"
-	"../counter_interface.c"
-	"../audio_pipeline.c"
-	"../radio_packet_buffers.c"
-	"../audio_encoding.c"
-	"../audio_intensity.c"
-	"../uart_sample_debug.c"
-	"../state_machine_interface.c"
+	"../radio/tx_retry.c"
 )
 
-get_target_property(interface_compile_options slc INTERFACE_COMPILE_OPTIONS)
-	list(REMOVE_ITEM interface_compile_options $<$<AND:$<CONFIG:default_config>,$<COMPILE_LANGUAGE:C>>:-Og>)
-	list(REMOVE_ITEM interface_compile_options $<$<AND:$<CONFIG:default_config>,$<COMPILE_LANGUAGE:CXX>>:-Og>)
-set_target_properties(TX_Board PROPERTIES INTERFACE_COMPILE_OPTIONS "${interface_compile_options}")
-
-target_compile_options(TX_Board PRIVATE
-	$<$<AND:$<CONFIG:default_config>,$<COMPILE_LANGUAGE:C>>:-O0>
-	$<$<AND:$<CONFIG:default_config>,$<COMPILE_LANGUAGE:CXX>>:-O0>
+target_compile_options(slc PUBLIC
+	"$<$<AND:$<CONFIG:base>,$<COMPILE_LANGUAGE:C>>:-O0>"
+	"$<$<AND:$<CONFIG:base>,$<COMPILE_LANGUAGE:CXX>>:-O0>"
 )

@@ -71,8 +71,8 @@ static const color_t black = {
 };
 
 void rgb__set_rgb_out(uint8_t RGB_number, color_t color, bool clear_other_colors, uint8_t intensity);
-void rgb__timer_init(void);
-void rgb__init(void);
+bool rgb__timer_init(void);
+bool rgb__init(void);
 void rgb__deinit(void);
 void rgb__start_radio_status_blink(uint32_t current_tick);
 void rgb__start_radio_status_blink_force(void);

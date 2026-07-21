@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-void audio_encoding__init(void);
+bool audio_encoding__init(void);
 void audio_encoding__test_adpcm_left(uint8_t *buffer);
 void audio_encoding__test_adpcm_right(uint8_t *buffer);
 

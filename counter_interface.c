@@ -70,9 +70,10 @@ static const counter_reset_t counter_resets[] = {
 };
 
 
-void counter_interface__init(void)
+bool counter_interface__init(void)
 {
     counter_interface__register_counters();
+    return true;
 }
 
 void counter_interface__register_counters(void)

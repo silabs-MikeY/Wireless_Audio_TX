@@ -101,7 +101,7 @@ extern "C"
 // If 1 prints get stored in buffers and printed out later
 // Ensure NUMBER_OF_PRINT_BUFFERS is large enough to hold all prints between debug_print() calls
 // If false, prints go directly to stdout
-#define DEBUG_PRINT_TO_BUFFERS 0
+#define DEBUG_PRINT_TO_BUFFERS 1
 
 // Formats timestamps so they're easier to read. Adds extra processing though
 #define FORMAT_TIMESTAMPS_WITH_COMMAS 1
@@ -110,13 +110,19 @@ typedef struct{
   char print_text[100];
   const char *print_text_pointer;
   bool used;
+  bool ready;
+  bool print_in_progress;
   bool use_print_text_pointer;
-  uint32_t timestamp_ticks;
+  uint64_t timestamp_ticks;
 } debug__print_buffer_t;
-#define NUMBER_OF_PRINT_BUFFERS 200
+#define NUMBER_OF_PRINT_BUFFERS 100
 
 void debug__check_print_buffers_and_print(void);
 void debug__print_all_buffers(void);
+bool debug__get_oldest_print_buffer(const char **text, size_t *length, uint8_t *buffer_index);
+bool debug__print_buffers_empty(void);
+void debug__mark_print_buffer_pending(uint8_t buffer_index);
+void debug__mark_print_buffer_reusable(uint8_t buffer_index);
 void printf_to_buf(uint32_t time, const char *format, ...);
 void printf_to_buf_string(uint32_t time, const char *text);
 void printf_to_buf_static_string(uint32_t time, const char *text);

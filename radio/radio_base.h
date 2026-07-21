@@ -12,7 +12,7 @@
 
 uint8_t* radio__get_next_buffer(bool left_or_right_data);
 void radio__process_event(RAIL_Handle_t rail_handle, RAIL_Events_t events);
-void radio__init(void);
+bool radio__init(void);
 void radio__deinit(void);
 uint32_t radio__get_next_sequence_number(void);
 void radio__increment_sequence_number(void);

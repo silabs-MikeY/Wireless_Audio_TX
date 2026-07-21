@@ -5,6 +5,6 @@
 #include "stddef.h"
 #include <stdbool.h>
 
-void radio_receive__init(void);
+bool radio_receive__init(void);
 bool radio__process_event_rx(RAIL_Handle_t rail_handle, RAIL_Events_t events);
 #endif

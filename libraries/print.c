@@ -55,11 +55,49 @@ void debug__format_timestamp_with_commas(uint64_t value, char *out, size_t outSi
 
 #if (DEBUG_PRINT_TO_BUFFERS == 1)
 volatile debug__print_buffer_t debug__print_buffers[NUMBER_OF_PRINT_BUFFERS];
+static uint64_t debug__print_enqueue_sequence = 0;
+static uint32_t debug__next_print_buffer_to_try = 0;
+static uint32_t debug__print_buffer_used_count = 0;
+static uint8_t debug__ready_fifo[NUMBER_OF_PRINT_BUFFERS];
+static uint32_t debug__ready_fifo_head = 0;
+static uint32_t debug__ready_fifo_tail = 0;
+static uint32_t debug__ready_fifo_count = 0;
+
+static bool debug__ready_fifo_push(uint8_t buffer_index)
+{
+    if ((buffer_index >= NUMBER_OF_PRINT_BUFFERS) ||
+        (debug__ready_fifo_count >= NUMBER_OF_PRINT_BUFFERS))
+    {
+        return false;
+    }
+
+    debug__ready_fifo[debug__ready_fifo_tail] = buffer_index;
+    debug__ready_fifo_tail =
+        (debug__ready_fifo_tail + 1U) % NUMBER_OF_PRINT_BUFFERS;
+    debug__ready_fifo_count++;
+    return true;
+}
+
+static bool debug__ready_fifo_pop(uint8_t *buffer_index)
+{
+    if ((buffer_index == NULL) || (debug__ready_fifo_count == 0U))
+    {
+        return false;
+    }
+
+    *buffer_index = debug__ready_fifo[debug__ready_fifo_head];
+    debug__ready_fifo_head =
+        (debug__ready_fifo_head + 1U) % NUMBER_OF_PRINT_BUFFERS;
+    debug__ready_fifo_count--;
+    return true;
+}
 
 static void debug__clear_print_buffer_payload(uint8_t available_buffer_index)
 {
     debug__print_buffers[available_buffer_index].print_text[0] = '\0';
     debug__print_buffers[available_buffer_index].print_text_pointer = NULL;
+    debug__print_buffers[available_buffer_index].ready = false;
+    debug__print_buffers[available_buffer_index].print_in_progress = false;
     debug__print_buffers[available_buffer_index].use_print_text_pointer = false;
 }
 
@@ -72,11 +110,17 @@ static bool debug__reserve_print_buffer(uint8_t *available_buffer_index)
 
     for (uint32_t i = 0; i < NUMBER_OF_PRINT_BUFFERS; i++)
     {
-        if (debug__print_buffers[i].used == false)
+        uint32_t candidate_index =
+            (debug__next_print_buffer_to_try + i) % NUMBER_OF_PRINT_BUFFERS;
+
+        if (debug__print_buffers[candidate_index].used == false)
         {
-            *available_buffer_index = i;
-            debug__print_buffers[i].used = true;
-            debug__clear_print_buffer_payload(i);
+            *available_buffer_index = (uint8_t)candidate_index;
+            debug__print_buffers[candidate_index].used = true;
+            debug__print_buffer_used_count++;
+            debug__clear_print_buffer_payload((uint8_t)candidate_index);
+            debug__next_print_buffer_to_try =
+                (candidate_index + 1U) % NUMBER_OF_PRINT_BUFFERS;
             break;
         }
     }
@@ -88,14 +132,16 @@ static bool debug__reserve_print_buffer(uint8_t *available_buffer_index)
 
 static void debug__finish_print_buffer(uint8_t available_buffer_index, uint32_t time)
 {
-    if (time == 0)
-    {
-        debug__print_buffers[available_buffer_index].timestamp_ticks = DWT->CYCCNT;
-    }
-    else
-    {
-        debug__print_buffers[available_buffer_index].timestamp_ticks = time;
-    }
+    (void)time;
+
+    CORE_DECLARE_IRQ_STATE;
+    CORE_ENTER_CRITICAL();
+
+    debug__print_buffers[available_buffer_index].timestamp_ticks =
+        ++debug__print_enqueue_sequence;
+    debug__print_buffers[available_buffer_index].ready = true;
+    (void)debug__ready_fifo_push(available_buffer_index);
+    CORE_EXIT_CRITICAL();
 }
 
 static void debug__copy_text_to_print_buffer(uint8_t available_buffer_index, const char *text)
@@ -120,42 +166,141 @@ static void debug__set_print_buffer_pointer(uint8_t available_buffer_index, cons
     debug__print_buffers[available_buffer_index].print_text[0] = '\0';
 }
 
-static void debug__print_buffer_entry(uint32_t buffer_index)
+bool debug__get_oldest_print_buffer(const char **text, size_t *length, uint8_t *buffer_index)
 {
-    if (debug__print_buffers[buffer_index].use_print_text_pointer == true)
+    uint8_t selected_buffer_index;
+    const char *selected_text = NULL;
+
+    if ((text == NULL) || (length == NULL) || (buffer_index == NULL))
     {
-        debug__write_console_text(debug__print_buffers[buffer_index].print_text_pointer);
+        return false;
+    }
+
+    CORE_DECLARE_IRQ_STATE;
+    CORE_ENTER_CRITICAL();
+
+    if (debug__ready_fifo_pop(&selected_buffer_index) == false)
+    {
+        CORE_EXIT_CRITICAL();
+        *text = NULL;
+        *length = 0U;
+        *buffer_index = NUMBER_OF_PRINT_BUFFERS;
+        return false;
+    }
+
+    if ((selected_buffer_index >= NUMBER_OF_PRINT_BUFFERS) ||
+        (debug__print_buffers[selected_buffer_index].used == false) ||
+        (debug__print_buffers[selected_buffer_index].ready == false) ||
+        (debug__print_buffers[selected_buffer_index].print_in_progress == true))
+    {
+        CORE_EXIT_CRITICAL();
+        *text = NULL;
+        *length = 0U;
+        *buffer_index = NUMBER_OF_PRINT_BUFFERS;
+        return false;
+    }
+
+    debug__print_buffers[selected_buffer_index].ready = false;
+    debug__print_buffers[selected_buffer_index].print_in_progress = true;
+
+    if (debug__print_buffers[selected_buffer_index].use_print_text_pointer == true)
+    {
+        selected_text = debug__print_buffers[selected_buffer_index].print_text_pointer;
     }
     else
     {
-        debug__write_console_text((const char *)debug__print_buffers[buffer_index].print_text);
+        selected_text = (const char *)debug__print_buffers[selected_buffer_index].print_text;
     }
 
-    debug__print_buffers[buffer_index].used = false;
-    debug__clear_print_buffer_payload((uint8_t)buffer_index);
+    if (selected_text == NULL)
+    {
+        debug__print_buffers[selected_buffer_index].used = false;
+        if (debug__print_buffer_used_count > 0U)
+        {
+            debug__print_buffer_used_count--;
+        }
+        debug__clear_print_buffer_payload(selected_buffer_index);
+        CORE_EXIT_CRITICAL();
+        return false;
+    }
+
+    *text = selected_text;
+    *buffer_index = selected_buffer_index;
+    CORE_EXIT_CRITICAL();
+    *length = strlen(selected_text);
+    return true;
+}
+
+bool debug__print_buffers_empty(void)
+{
+    bool empty = true;
+
+    CORE_DECLARE_IRQ_STATE;
+    CORE_ENTER_CRITICAL();
+    empty = (debug__print_buffer_used_count == 0U);
+    CORE_EXIT_CRITICAL();
+
+    return empty;
+}
+
+void debug__mark_print_buffer_reusable(uint8_t buffer_index)
+{
+    if (buffer_index >= NUMBER_OF_PRINT_BUFFERS)
+    {
+        return;
+    }
+
+    CORE_DECLARE_IRQ_STATE;
+    CORE_ENTER_CRITICAL();
+    if (debug__print_buffers[buffer_index].used == true)
+    {
+        debug__print_buffers[buffer_index].used = false;
+        if (debug__print_buffer_used_count > 0U)
+        {
+            debug__print_buffer_used_count--;
+        }
+        debug__clear_print_buffer_payload(buffer_index);
+    }
+    CORE_EXIT_CRITICAL();
+}
+
+void debug__mark_print_buffer_pending(uint8_t buffer_index)
+{
+    if (buffer_index >= NUMBER_OF_PRINT_BUFFERS)
+    {
+        return;
+    }
+
+    CORE_DECLARE_IRQ_STATE;
+    CORE_ENTER_CRITICAL();
+    if (debug__print_buffers[buffer_index].used == true)
+    {
+        debug__print_buffers[buffer_index].ready = true;
+        debug__print_buffers[buffer_index].print_in_progress = false;
+        (void)debug__ready_fifo_push(buffer_index);
+    }
+    CORE_EXIT_CRITICAL();
+}
+
+static void debug__print_buffer_entry(uint32_t buffer_index)
+{
+    const char *text = NULL;
+    size_t length = 0U;
+    uint8_t selected_buffer_index = NUMBER_OF_PRINT_BUFFERS;
+
+    (void)buffer_index;
+
+    if (debug__get_oldest_print_buffer(&text, &length, &selected_buffer_index))
+    {
+        (void)length;
+        debug__write_console_text(text);
+        debug__mark_print_buffer_reusable(selected_buffer_index);
+    }
 }
 
 void debug__check_print_buffers_and_print(void)
 {
-    uint32_t lowest_timestamp_index = NUMBER_OF_PRINT_BUFFERS;
-    unsigned long long lowest_timestamp = ~0ULL;
-
-    for (uint32_t i = 0; i < NUMBER_OF_PRINT_BUFFERS; i++)
-    {
-        if (debug__print_buffers[i].used == true)
-        {
-            if (debug__print_buffers[i].timestamp_ticks < lowest_timestamp)
-            {
-                lowest_timestamp = debug__print_buffers[i].timestamp_ticks;
-                lowest_timestamp_index = i;
-            }
-        }
-    }
-
-    if (lowest_timestamp_index < NUMBER_OF_PRINT_BUFFERS)
-    {
-        debug__print_buffer_entry(lowest_timestamp_index);
-    }
+    debug__print_buffer_entry(0U);
 }
 
 void debug__print_all_buffers(void)
@@ -271,9 +416,14 @@ void debug__printf_to_buf_append_time(uint32_t time, const char *format, ...)
 
     for (uint32_t i = 0; i < NUMBER_OF_PRINT_BUFFERS; i++)
     {
-        if (debug__print_buffers[i].used == false)
+        uint32_t candidate_index =
+            (debug__next_print_buffer_to_try + i) % NUMBER_OF_PRINT_BUFFERS;
+
+        if (debug__print_buffers[candidate_index].used == false)
         {
-            available_buffer_index = i;
+            available_buffer_index = (uint8_t)candidate_index;
+            debug__next_print_buffer_to_try =
+                (candidate_index + 1U) % NUMBER_OF_PRINT_BUFFERS;
             break;
         }
     }
@@ -286,6 +436,7 @@ void debug__printf_to_buf_append_time(uint32_t time, const char *format, ...)
     }
 
     debug__print_buffers[available_buffer_index].used = true;
+    debug__print_buffer_used_count++;
     debug__clear_print_buffer_payload(available_buffer_index);
 
     CORE_EXIT_CRITICAL();
@@ -326,14 +477,12 @@ void debug__printf_to_buf_append_time(uint32_t time, const char *format, ...)
     debug__print_buffers[available_buffer_index].use_print_text_pointer = false;
     debug__print_buffers[available_buffer_index].print_text_pointer = NULL;
 
-    if (time == 0)
-    {
-        debug__print_buffers[available_buffer_index].timestamp_ticks = DWT->CYCCNT;
-    }
-    else
-    {
-        debug__print_buffers[available_buffer_index].timestamp_ticks = time;
-    }
+    CORE_ENTER_CRITICAL();
+    debug__print_buffers[available_buffer_index].timestamp_ticks =
+        ++debug__print_enqueue_sequence;
+    debug__print_buffers[available_buffer_index].ready = true;
+    (void)debug__ready_fifo_push(available_buffer_index);
+    CORE_EXIT_CRITICAL();
 
     va_end(args);
 }
@@ -346,6 +495,38 @@ void debug__check_print_buffers_and_print(void)
 void debug__print_all_buffers(void)
 {
     return;
+}
+
+bool debug__get_oldest_print_buffer(const char **text, size_t *length, uint8_t *buffer_index)
+{
+    if (text != NULL)
+    {
+        *text = NULL;
+    }
+    if (length != NULL)
+    {
+        *length = 0U;
+    }
+    if (buffer_index != NULL)
+    {
+        *buffer_index = NUMBER_OF_PRINT_BUFFERS;
+    }
+    return false;
+}
+
+bool debug__print_buffers_empty(void)
+{
+    return true;
+}
+
+void debug__mark_print_buffer_reusable(uint8_t buffer_index)
+{
+    (void)buffer_index;
+}
+
+void debug__mark_print_buffer_pending(uint8_t buffer_index)
+{
+    (void)buffer_index;
 }
 
 void printf_to_buf(uint32_t time, const char *format, ...)

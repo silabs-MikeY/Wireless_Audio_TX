@@ -103,16 +103,17 @@ void scheduler__deinit_SysTick(void) {
   scheduler__printf(true, "Finish SysTick DeInit\n");
 }
 
-void scheduler__init_SysTick(void) {
+bool scheduler__init_SysTick(void) {
   scheduler__printf(true, "Starting SysTick\n");
   uint32_t core_speed = CMU_ClockFreqGet(cmuClock_CORE);
   scheduler__printf(true, "Core Speed : %u\n", (unsigned int)core_speed);
   if (SysTick_Config(core_speed / 1000) != 0) {
     scheduler__printf(true, "Systick Failed to start\n");
-    assert(0);
+    return false;
   }
   scheduler__reset_milliseconds();
   scheduler__printf(true, "Systick Started\n");
+  return true;
 }
 
 __attribute__((weak)) void run_scheduler_1_ms(void) { return; }

@@ -41,10 +41,10 @@
 #include "hardware_config.h"
 #include "microseconds.h"
 #include "print.h"
+#include "print_interfacing.h"
 #include "radio_base.h"
 #include "rail_types.h"
 #include "scheduler.h"
-#include "sl_iostream.h"
 #include "sl_rail_util_init.h"
 // #include "radio.h"
 #include "counters_new.h"
@@ -102,6 +102,26 @@ static uint32_t app_process_action_last_run_micros = 0;
 typedef enum app_process_counter_index_s {
   APP_PROCESS_ACTION_RUNS = 0,
   APP_PROCESS_ACTION_RUNS_MAX_MICROS_BETWEEN_RUNS,
+  APP_PROCESS_STAGE_STATE_MACHINE_MAX_MICROS,
+  APP_PROCESS_STAGE_SCHEDULER_MAX_MICROS,
+  APP_PROCESS_STAGE_AUDIO_PIPELINE_MAX_MICROS,
+  APP_PROCESS_STAGE_RADIO_MAX_MICROS,
+  APP_PROCESS_STAGE_UART_SAMPLE_DEBUG_MAX_MICROS,
+  APP_PROCESS_STAGE_AUDIO_INTENSITY_MAX_MICROS,
+  APP_PROCESS_STAGE_COUNTERS_PRINT_MAX_MICROS,
+  APP_PROCESS_STAGE_PRINT_PROCESS_MAX_MICROS,
+  APP_PROCESS_CALLED_STATE_MACHINE,
+  APP_PROCESS_CALLED_SCHEDULER,
+  APP_PROCESS_CALLED_AUDIO_PIPELINE,
+  APP_PROCESS_CALLED_RADIO,
+  APP_PROCESS_CALLED_UART_SAMPLE_DEBUG,
+  APP_PROCESS_CALLED_AUDIO_INTENSITY,
+  APP_PROCESS_CALLED_COUNTERS_PRINT,
+  APP_PROCESS_CALLED_PRINT_PROCESS,
+  APP_PROCESS_RETURNED_STATE_MACHINE,
+  APP_PROCESS_RETURNED_SCHEDULER,
+  APP_PROCESS_RETURNED_AUDIO_PIPELINE,
+  APP_PROCESS_RETURNED_PRINT_PROCESS,
   APP_PROCESS_NUMBER_OF_COUNTERS
 } app_process_counter_index_t;
 
@@ -110,6 +130,26 @@ static volatile uint32_t
 static const char *app_process_counter_names[APP_PROCESS_NUMBER_OF_COUNTERS] = {
     "app_process_action_runs",
     "app_process_action_runs_max_micros_between_runs",
+    "app_process_stage_state_machine_max_micros",
+    "app_process_stage_scheduler_max_micros",
+    "app_process_stage_audio_pipeline_max_micros",
+    "app_process_stage_radio_max_micros",
+    "app_process_stage_uart_sample_debug_max_micros",
+    "app_process_stage_audio_intensity_max_micros",
+    "app_process_stage_counters_print_max_micros",
+    "app_process_stage_print_process_max_micros",
+    "app_process_called_state_machine",
+    "app_process_called_scheduler",
+    "app_process_called_audio_pipeline",
+    "app_process_called_radio",
+    "app_process_called_uart_sample_debug",
+    "app_process_called_audio_intensity",
+    "app_process_called_counters_print",
+    "app_process_called_print_process",
+    "app_process_returned_state_machine",
+    "app_process_returned_scheduler",
+    "app_process_returned_audio_pipeline",
+    "app_process_returned_print_process",
 };
 
 uint32_t app_process__get_number_of_counters(void) {
@@ -144,6 +184,8 @@ void app_process__reset_counters(void) {
 // -----------------------------------------------------------------------------
 static void run_audio_intensity(void);
 static void run_app_process_counters_update(void);
+static void app_process__update_stage_max(app_process_counter_index_t counter,
+                                          uint32_t start_micros);
 // -----------------------------------------------------------------------------
 //                                Global Variables
 // -----------------------------------------------------------------------------
@@ -249,29 +291,75 @@ void app_process_action(RAIL_Handle_t rail_handle) {
 
   scheduler__update_millis();
 
+  uint32_t stage_start_micros = microseconds__get_micros_count();
+  app_process_counter_values[APP_PROCESS_CALLED_STATE_MACHINE]++;
   if (state_machine__run_state_machine()) {
+    app_process__update_stage_max(APP_PROCESS_STAGE_STATE_MACHINE_MAX_MICROS,
+                                  stage_start_micros);
+    app_process_counter_values[APP_PROCESS_RETURNED_STATE_MACHINE]++;
     return;
   }
+  app_process__update_stage_max(APP_PROCESS_STAGE_STATE_MACHINE_MAX_MICROS,
+                                stage_start_micros);
 
+  stage_start_micros = microseconds__get_micros_count();
+  app_process_counter_values[APP_PROCESS_CALLED_SCHEDULER]++;
   if (scheduler__run_scheduler()) {
+    app_process__update_stage_max(APP_PROCESS_STAGE_SCHEDULER_MAX_MICROS,
+                                  stage_start_micros);
+    app_process_counter_values[APP_PROCESS_RETURNED_SCHEDULER]++;
     return;
   }
+  app_process__update_stage_max(APP_PROCESS_STAGE_SCHEDULER_MAX_MICROS,
+                                stage_start_micros);
 
+  stage_start_micros = microseconds__get_micros_count();
+  app_process_counter_values[APP_PROCESS_CALLED_AUDIO_PIPELINE]++;
   if (audio_pipeline__run_process()) {
+    app_process__update_stage_max(APP_PROCESS_STAGE_AUDIO_PIPELINE_MAX_MICROS,
+                                  stage_start_micros);
+    app_process_counter_values[APP_PROCESS_RETURNED_AUDIO_PIPELINE]++;
     return;
   }
+  app_process__update_stage_max(APP_PROCESS_STAGE_AUDIO_PIPELINE_MAX_MICROS,
+                                stage_start_micros);
 
+  stage_start_micros = microseconds__get_micros_count();
+  app_process_counter_values[APP_PROCESS_CALLED_RADIO]++;
   radio__run_process();
+  app_process__update_stage_max(APP_PROCESS_STAGE_RADIO_MAX_MICROS,
+                                stage_start_micros);
   // RESET_LOOP_IF_NECESSARY()
 
+  stage_start_micros = microseconds__get_micros_count();
+  app_process_counter_values[APP_PROCESS_CALLED_UART_SAMPLE_DEBUG]++;
   uart_sample_debug__check_for_new_data_and_transmit();
+  app_process__update_stage_max(APP_PROCESS_STAGE_UART_SAMPLE_DEBUG_MAX_MICROS,
+                                stage_start_micros);
 
+  stage_start_micros = microseconds__get_micros_count();
+  app_process_counter_values[APP_PROCESS_CALLED_AUDIO_INTENSITY]++;
   run_audio_intensity();
+  app_process__update_stage_max(APP_PROCESS_STAGE_AUDIO_INTENSITY_MAX_MICROS,
+                                stage_start_micros);
 
+  stage_start_micros = microseconds__get_micros_count();
+  app_process_counter_values[APP_PROCESS_CALLED_COUNTERS_PRINT]++;
   counters__run_print_state_machine();
+  app_process__update_stage_max(APP_PROCESS_STAGE_COUNTERS_PRINT_MAX_MICROS,
+                                stage_start_micros);
   // RESET_LOOP_IF_NECESSARY()
 
-  debug__check_print_buffers_and_print();
+  stage_start_micros = microseconds__get_micros_count();
+  app_process_counter_values[APP_PROCESS_CALLED_PRINT_PROCESS]++;
+  if (print_interfacing__process()) {
+    app_process__update_stage_max(APP_PROCESS_STAGE_PRINT_PROCESS_MAX_MICROS,
+                                  stage_start_micros);
+    app_process_counter_values[APP_PROCESS_RETURNED_PRINT_PROCESS]++;
+    return;
+  }
+  app_process__update_stage_max(APP_PROCESS_STAGE_PRINT_PROCESS_MAX_MICROS,
+                                stage_start_micros);
   // RESET_LOOP_IF_NECESSARY()
 
   return;
@@ -325,6 +413,16 @@ static void run_app_process_counters_update(void) {
         [APP_PROCESS_ACTION_RUNS_MAX_MICROS_BETWEEN_RUNS] = delta;
   }
   app_process_action_last_run_micros = timestamp_now;
+}
+
+static void app_process__update_stage_max(app_process_counter_index_t counter,
+                                          uint32_t start_micros) {
+  uint32_t elapsed_micros = microseconds__get_micros_count() - start_micros;
+
+  if ((counter < APP_PROCESS_NUMBER_OF_COUNTERS) &&
+      (elapsed_micros > app_process_counter_values[counter])) {
+    app_process_counter_values[counter] = elapsed_micros;
+  }
 }
 // -----------------------------------------------------------------------------
 //                          Static Function Definitions End

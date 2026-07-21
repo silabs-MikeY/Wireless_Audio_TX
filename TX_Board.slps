@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="ASCII"?>
 <model:MDescriptors xmlns:model="http://www.silabs.com/ss/Studio.ecore">
   <descriptors name="TX_Board">
-    <properties key="projectCommon.sdkId" value="com.silabs.sdk.stack.sisdk:2025.6.2._795988567-2373502477"/>
+    <properties key="projectCommon.sdkId" value="com.silabs.sdk.stack.sisdk:2025.6.2._7959885672373502477"/>
     <properties key="universalConfig.relativeWorkspacePath" value="../TX_Board.slcw"/>
     <properties key="universalConfig.generationDirectory" value=""/>
     <properties key="universalConfig.toolchainCompatibility" value="iar gcc"/>

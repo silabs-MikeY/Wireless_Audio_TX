@@ -37,13 +37,14 @@ void uart_sample_debug__flag_transmit_complete(void) {
   }
 }
 
-void uart_sample_debug__init(void) {
+bool uart_sample_debug__init(void) {
   // Initialize UART for debugging purposes
   // This function should set up the UART peripheral with the desired baud rate,
   // data bits, stop bits, and parity. The implementation will depend on the
   // specific microcontroller and its UART library.
 
   uart_sample_debug__reset_all_buffers();
+  return true;
 }
 
 void uart_sample_debug__add_to_buffer(uint8_t *data, uint32_t length) {

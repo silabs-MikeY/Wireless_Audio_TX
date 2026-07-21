@@ -82,11 +82,12 @@ static bool audio_pipeline__try_to_build_radio_packet_from_ring_buffer(void);
 //                     Audio Pipeline General
 // -----------------------------------------------------------------------------
 
-void audio_pipeline__init(bool is_stereo, bool enable_encoder)
+bool audio_pipeline__init(bool is_stereo, bool enable_encoder)
 {
   stereo_flag = is_stereo;
   encoder_enabled = enable_encoder;
   adpcm_initialized = false;
+  return true;
 }
 
 bool audio_pipeline__is_stereo(void)

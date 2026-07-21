@@ -30,16 +30,15 @@ static sl_gpio_t button_pin = {
   .port = BUTTON_PORT,
 };
 
-static void button__configure_interrupt(int32_t edge)
+static bool button__configure_interrupt(int32_t edge)
 {
   sl_status_t return_status = sl_gpio_configure_external_interrupt(&button_pin, &button_interrupt_number, edge, button_callback, 0);
   if (return_status != SL_STATUS_OK)
   {
     button__printf(true, "GPIO Configure Error: %X\n", (unsigned int)return_status);
-    while (1)
-    {
-    }
+    return false;
   }
+  return true;
 }
 
 void button_callback(uint8_t int_no, void *context)
@@ -52,18 +51,18 @@ void button_callback(uint8_t int_no, void *context)
     button_waiting_for_falling_edge = true;
     button__rising_edge();
     (void)sl_gpio_deconfigure_external_interrupt(button_interrupt_number);
-    button__configure_interrupt(SL_GPIO_INTERRUPT_FALLING_EDGE);
+    (void)button__configure_interrupt(SL_GPIO_INTERRUPT_FALLING_EDGE);
   }
   else
   {
     button_waiting_for_falling_edge = false;
     button__falling_edge();
     (void)sl_gpio_deconfigure_external_interrupt(button_interrupt_number);
-    button__configure_interrupt(SL_GPIO_INTERRUPT_RISING_EDGE);
+    (void)button__configure_interrupt(SL_GPIO_INTERRUPT_RISING_EDGE);
   }
 }
 
-void button__init(void)
+bool button__init(void)
 {
   CMU_ClockEnable(cmuClock_GPIO, true);
 
@@ -71,8 +70,11 @@ void button__init(void)
 
   button_waiting_for_falling_edge = false;
   button_interrupt_number = SL_GPIO_INTERRUPT_UNAVAILABLE;
-  button__configure_interrupt(SL_GPIO_INTERRUPT_RISING_EDGE);
+  if (!button__configure_interrupt(SL_GPIO_INTERRUPT_RISING_EDGE)) {
+    return false;
+  }
   button__printf(true, "Enabled Button \n");
+  return true;
 }
 
 void button__deinit(void)

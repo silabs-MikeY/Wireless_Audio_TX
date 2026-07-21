@@ -8,7 +8,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-void radio_transmit__init(void);
+bool radio_transmit__init(void);
 bool radio_transmit__run_process(void);
 bool radio__send_packet_by_sequence_number(uint16_t sequence_number, bool retry);
 bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events);

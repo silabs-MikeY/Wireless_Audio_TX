@@ -199,7 +199,7 @@ bool timers__init_timer_cmu(TIMER_TypeDef *timer)
     if(TIMER_Valid(timer) == false)
     {
         debug__printf_to_buf_append_time(0,"Bad timer choice\n");
-        assert(0);
+        return false;
     }
 
   if (timer == TIMER0)

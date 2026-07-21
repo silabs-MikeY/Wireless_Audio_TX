@@ -140,16 +140,24 @@ void microseconds__deinit_microsecond(void)
     DEBUG_PERIPHERALS_LOG(microseconds__printf(0,"-- Finished Stopping Microsecond Tick Timer\n"));
 }
 
-static void microseconds__validate_microsecond_count_timer(void)
+static bool microseconds__validate_microsecond_count_timer(void)
 {
     uint32_t start_count = MICROS_COUNT_TIMER->CNT;
     DEBUG_PERIPHERALS_LOG(microseconds__printf(DWT->CYCCNT,"Testing Microsecond Timer with 50uS Wait : Current %u\n", (unsigned int)start_count));
 
-    while ((uint32_t)(MICROS_COUNT_TIMER->CNT - start_count) < 50u)
+    uint32_t tick_count = DWT->CYCCNT;
+
+    while ((uint32_t)(MICROS_COUNT_TIMER->CNT - start_count) < 500u)
     {
+        if ((DWT->CYCCNT - tick_count) > 1000000u)
+        {
+            DEBUG_PERIPHERALS_LOG(microseconds__printf(DWT->CYCCNT,"Microsecond Timer Test Failed : Current %u\n", (unsigned int)MICROS_COUNT_TIMER->CNT));
+            return false;
+        }
     }
 
     DEBUG_PERIPHERALS_LOG(microseconds__printf(DWT->CYCCNT,"Microsecond Timer Finished Testing\n"));
+    return true;
 }
 
 /**
@@ -160,13 +168,13 @@ static void microseconds__validate_microsecond_count_timer(void)
  * @param None
  * @return void
  */
-void microseconds__init_microsecond(void)
+bool microseconds__init_microsecond(void)
 {
     DEBUG_PERIPHERALS_LOG(microseconds__printf(0,"-- Starting Microsecond Tick Timer\n"));
     if (TIMER_Valid(MICROS_TICK_TIMER) == false)
     {
         DEBUG_PERIPHERALS_LOG(microseconds__printf(0,"Bad MICROS_TIMER choice\n"));
-        assert(0);
+        return false;
     }
 
     // CMU_ClockEnable(cmuClock_PRS, true);
@@ -189,7 +197,7 @@ void microseconds__init_microsecond(void)
 
     if (timers__init_timer_cmu(MICROS_TICK_TIMER) == false)
     {
-        assert(0);
+        return false;
     }
 
     //   if (MICROS_TICK_TIMER == TIMER0)
@@ -246,7 +254,7 @@ void microseconds__init_microsecond(void)
     {
         // Under 1MHZ Too Low
         DEBUG_PERIPHERALS_LOG(microseconds__printf(0,"Micros timer base peripheral speed too Low\n"));
-        assert(0);
+        return false;
     }
 
     if (timer_speed % 1000000 != 0)
@@ -256,7 +264,7 @@ void microseconds__init_microsecond(void)
         // Don't have a solution for this yet
         // TODO find a solution
         DEBUG_PERIPHERALS_LOG(microseconds__printf(0,"Micros timer base peripheral speed is not multiple of 1MHz\n"));
-        assert(0);
+        return false;
     }
 
     // Find Highest Prescaler Possible to Create 1MHz Timer
@@ -343,8 +351,13 @@ void microseconds__init_microsecond(void)
 
     DEBUG_PERIPHERALS_LOG(microseconds__printf(0,"-- Started Microsecond Tick Timer\n"));
 
-    microseconds__init_microsecond_count();
-    microseconds__validate_microsecond_count_timer();
+    if (!microseconds__init_microsecond_count()) {
+        return false;
+    }
+    if (!microseconds__validate_microsecond_count_timer()) {
+        return false;
+    }
+    return true;
 }
 
 /**
@@ -355,7 +368,7 @@ void microseconds__init_microsecond(void)
  * @param None
  * @return void
  */
-void microseconds__init_microsecond_count(void)
+bool microseconds__init_microsecond_count(void)
 {
     // TODO CHECK FOR ALREADY INIT
     DEBUG_PERIPHERALS_LOG(microseconds__printf(0,"-- Starting Microsecond Count Timer\n"));
@@ -363,7 +376,7 @@ void microseconds__init_microsecond_count(void)
     if (TIMER_Valid(MICROS_COUNT_TIMER) == false)
     {
         DEBUG_PERIPHERALS_LOG(microseconds__printf(0,"Bad MICROS_COUNT_TIMER choice\n"));
-        assert(0);
+        return false;
     }
 
     // if (((uint8_t*)MICROS_COUNT_TIMER) - (sizeof(TIMER_TypeDef)) != MICROS_TICK_TIMER)
@@ -384,7 +397,7 @@ void microseconds__init_microsecond_count(void)
 
     if (timers__init_timer_cmu(MICROS_COUNT_TIMER) == false)
     {
-        assert(0);
+        return false;
     }
 
     // CMU_Clock_TypeDef clock_to_enable;
@@ -442,6 +455,7 @@ void microseconds__init_microsecond_count(void)
     TIMER_Enable(MICROS_COUNT_TIMER, true);
 
     DEBUG_PERIPHERALS_LOG(microseconds__printf(0,"-- Started Microsecond Count Timer\n"));
+    return true;
 }
 
 /**

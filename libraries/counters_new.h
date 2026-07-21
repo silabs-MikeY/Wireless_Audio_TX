@@ -17,12 +17,14 @@ void counters__post_print_hook(void);
 
 // uint32_t counters_new__get_counter_value(uint32_t counter_index);
 int32_t counters__register_counter(const char* input_counter_name, uint32_t* input_counter_address);
-void counters__init();
+bool counters__init(void);
 bool counters__get_non_volatile_counters_array(uint32_t* counters_array, uint32_t* array_size);
 void counters__save_and_print_counters(uint32_t current_timestamp);
 
 #define COUNTER_BUFFER_MAX_COUNT 128
 #define COUNTER_NAME_MAX_LENGTH 64
+#define COUNTER_STRING_BUFFER_LENGTH (COUNTER_NAME_MAX_LENGTH + 32)
+#define COUNTER_FULL_PRINT_INTERVAL_SNAPSHOTS 10
 
 
 #endif // COUNTERS_NEW_H

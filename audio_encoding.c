@@ -128,10 +128,11 @@ static void audio_encoding__print_adpcm_diff(const char *channel_name,
               (long)max_abs_diff);
 }
 
-void audio_encoding__init(void)
+bool audio_encoding__init(void)
 {
   ADPCM_init(&left_ctx);
   ADPCM_init(&right_ctx);
+  return true;
 }
 
 void audio_encoding__test_adpcm_left(uint8_t *buffer)

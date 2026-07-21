@@ -14,6 +14,6 @@
 void wdog__printf(bool add_timestamp, const char *format, ...);
 void wdog__on_irq(void);
 
-void wdog__init(void);
+bool wdog__init(void);
 
 #endif /* WDOG_H_ */

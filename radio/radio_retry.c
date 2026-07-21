@@ -27,9 +27,10 @@ missing_packet_list_entry_t missing_packet_list[MISSING_PACKET_LIST_SIZE];
  * @param None
  * @return void
  */
-void radio_retry__init(void)
+bool radio_retry__init(void)
 {
     memset(missing_packet_list, 0, sizeof(missing_packet_list));
+    return true;
 }
 
 /**

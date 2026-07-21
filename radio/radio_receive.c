@@ -19,22 +19,23 @@ uint16_t radio_rx_fifo_size = RADIO_FIFO_SIZE;
  * @param None
  * @return void
  */
-void radio_receive__init(void)
+bool radio_receive__init(void)
 {
-    RAIL_Handle_t *rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_INST);
+    RAIL_Handle_t *rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_RAIL_HANDLE_INST);
 
     RAIL_Status_t RAIL_SetRxFifo_return = RAIL_SetRxFifo(rail_handle, (uint8_t *)radio_rx_fifo, &radio_rx_fifo_size);
     if (RAIL_SetRxFifo_return != RAIL_STATUS_NO_ERROR)
     {
         radio__printf(true, "RAIL_SetRxFifo failed, Status Code: %X\n", (unsigned int)RAIL_SetRxFifo_return);
-        assert(0);
+        return false;
     }
     if (radio_rx_fifo_size != RADIO_FIFO_SIZE)
     {
         radio__printf(true, "RAIL_SetRxFifo Failed. Requested : %u Bytes, Got %u Bytes \n", (unsigned int)RADIO_FIFO_SIZE, (unsigned int)radio_rx_fifo_size);
-        assert(0);
+        return false;
     }
     radio__printf(true, "RAIL_SetRxFifo Success, %u Bytes\n", (unsigned int)radio_rx_fifo_size);
+    return true;
 }
 
 /**

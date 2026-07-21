@@ -3,17 +3,19 @@
 
 #include "ADC.h"
 
-#include "dmadrv.h"
 #include "em_cmu.h"
 #include "em_gpio.h"
 #include "em_ldma.h"
 #include "em_usart.h"
+#include "ldma_manager.h"
 
 #include <string.h>
 
-static void adc__init_i2s(void);
-static void adc__ldma_init(void);
-static void adc__wait_for_startup_validation(void);
+#define ADC_INVALID_LDMA_CHANNEL ((unsigned int)UINT32_MAX)
+
+static bool adc__init_i2s(void);
+static bool adc__ldma_init(void);
+static bool adc__wait_for_startup_validation(void);
 static void adc__print_sample_format_summary(void);
 static bool DMA_left_callback(unsigned int channel, unsigned int sequenceNo,
                               void *userParam);
@@ -55,17 +57,13 @@ static const char *adc_counter_names[ADC_NUMBER_OF_COUNTERS] = {
 
 static bool library_initialized = false;
 
-LDMA_Descriptor_t leftDesc[2];
-LDMA_Descriptor_t rightDesc[2];
+LDMA_Descriptor_t leftDesc[ADC_DMA_BUFFER_COUNT];
+LDMA_Descriptor_t rightDesc[ADC_DMA_BUFFER_COUNT];
 LDMA_TransferCfg_t leftCfg;
 LDMA_TransferCfg_t rightCfg;
 
 static adc_dma_buffer_t leftBuffers[ADC_DMA_BUFFER_COUNT];
 static adc_dma_buffer_t rightBuffers[ADC_DMA_BUFFER_COUNT];
-static volatile uint8_t leftDmaPingPongBuffers[2][ADC_BUFFER_SIZE]
-    __attribute__((aligned(4)));
-static volatile uint8_t rightDmaPingPongBuffers[2][ADC_BUFFER_SIZE]
-    __attribute__((aligned(4)));
 
 static volatile uint32_t left_dma_buffer_index = 0;
 static volatile uint32_t right_dma_buffer_index = 0;
@@ -94,8 +92,8 @@ volatile uint8_t leftBuffer_test[ADC_BUFFER_SIZE] __attribute__((aligned(4)));
 volatile uint8_t rightBuffer_test[ADC_BUFFER_SIZE] __attribute__((aligned(4)));
 ;
 
-unsigned int LDMA_CHANNEL_LEFT;
-unsigned int LDMA_CHANNEL_RIGHT;
+unsigned int LDMA_CHANNEL_LEFT = ADC_INVALID_LDMA_CHANNEL;
+unsigned int LDMA_CHANNEL_RIGHT = ADC_INVALID_LDMA_CHANNEL;
 
 extern uint32_t start;
 extern volatile uint32_t debug_signals[10];
@@ -104,10 +102,8 @@ static bool stereo_flag = false;
 
 static void adc__update_left_buffer_counters(void);
 static void adc__update_right_buffer_counters(void);
-static void
-adc__store_completed_left_buffer(const volatile uint8_t *source_buffer);
-static void
-adc__store_completed_right_buffer(const volatile uint8_t *source_buffer);
+static void adc__mark_completed_left_buffer(uint32_t buffer_index);
+static void adc__mark_completed_right_buffer(uint32_t buffer_index);
 
 static volatile bool startup_left_buffer_ready = false;
 static volatile bool startup_right_buffer_ready = false;
@@ -314,7 +310,8 @@ void adc__mark_right_dma_buffer_stale(uint32_t buffer_index) {
  * @param None
  * @return void
  */
-void adc__init(bool is_stereo) {
+bool adc__init(bool is_stereo, unsigned int ldma_channel_left,
+               unsigned int ldma_channel_right) {
   if (library_initialized == true) {
     adc__printf(true, "ADC Library Already Initialized. De-Initializing\n");
     adc__deinit();
@@ -322,20 +319,32 @@ void adc__init(bool is_stereo) {
 
   stereo_flag = is_stereo;
   adc__printf(true, "ADC Init Stereo Flag: %u\n", (unsigned int)stereo_flag);
+  LDMA_CHANNEL_LEFT = ldma_channel_left;
+  LDMA_CHANNEL_RIGHT = ldma_channel_right;
+
   adc__reset_counters();
   memset((void *)leftBuffers, 0, sizeof(leftBuffers));
   memset((void *)rightBuffers, 0, sizeof(rightBuffers));
-  leftBuffer_to_process = (volatile uint8_t *)leftDmaPingPongBuffers[0];
-  rightBuffer_to_process = (volatile uint8_t *)rightDmaPingPongBuffers[0];
+  leftBuffer_to_process = (volatile uint8_t *)leftBuffers[0].data;
+  rightBuffer_to_process = (volatile uint8_t *)rightBuffers[0].data;
   startup_left_buffer_ready = false;
   startup_right_buffer_ready = false;
-  adc__ldma_init();
-  adc__init_i2s();
+  if (!adc__ldma_init()) {
+    return false;
+  }
+  if (!adc__init_i2s()) {
+    adc__deinit();
+    return false;
+  }
   USART_Enable(USART0, usartEnable);
-  adc__wait_for_startup_validation();
+  if (!adc__wait_for_startup_validation()) {
+    adc__deinit();
+    return false;
+  }
 
   library_initialized = true;
   adc__printf(true, "ADC Init Complete\n");
+  return true;
 }
 
 /**
@@ -364,32 +373,19 @@ void adc__deinit(void) {
   // LDMA_StopTransfer(LDMA_CHANNEL_RIGHT);
   // printf_to_buf_append_time(0,"STOPPED LDMA RIGHT\n");
 
-  if (!((LDMA_CHANNEL_LEFT == 0) && (LDMA_CHANNEL_RIGHT == 0))) {
-    Ecode_t DMADRV_return_status;
-
-    DMADRV_return_status = DMADRV_StopTransfer(LDMA_CHANNEL_LEFT);
-    DMADRV_return_status = DMADRV_FreeChannel(LDMA_CHANNEL_LEFT);
-    if (DMADRV_return_status == ECODE_EMDRV_DMADRV_OK) {
-      adc__printf(true, "DEINITIALIZED LEFT DMA CHANNEL: %u\n",
-                  (unsigned int)LDMA_CHANNEL_LEFT);
-    } else if (DMADRV_return_status == ECODE_EMDRV_DMADRV_ALREADY_FREED) {
-      adc__printf(true, "LEFT DMA CHANNEL: %u already freed\n",
-                  (unsigned int)LDMA_CHANNEL_LEFT);
-    } else if (DMADRV_return_status == ECODE_EMDRV_DMADRV_NOT_INITIALIZED) {
-      assert(0);
-    }
-
-    DMADRV_return_status = DMADRV_StopTransfer(LDMA_CHANNEL_RIGHT);
-    DMADRV_return_status = DMADRV_FreeChannel(LDMA_CHANNEL_RIGHT);
-    if (DMADRV_return_status == ECODE_EMDRV_DMADRV_OK) {
-      adc__printf(true, "DEINITIALIZED RIGHT DMA CHANNEL: %u\n",
-                  (unsigned int)LDMA_CHANNEL_RIGHT);
-    } else if (DMADRV_return_status == ECODE_EMDRV_DMADRV_ALREADY_FREED) {
-      adc__printf(true, "RIGHT DMA CHANNEL: %u ALREADY FREED\n",
-                  (unsigned int)LDMA_CHANNEL_RIGHT);
-    } else if (DMADRV_return_status == ECODE_EMDRV_DMADRV_NOT_INITIALIZED) {
-      assert(0);
-    }
+  if (LDMA_CHANNEL_LEFT != ADC_INVALID_LDMA_CHANNEL) {
+    LDMA_StopTransfer((int)LDMA_CHANNEL_LEFT);
+    (void)ldma_manager__set_callback(LDMA_CHANNEL_LEFT, NULL, NULL);
+    adc__printf(true, "DEINITIALIZED LEFT DMA CHANNEL: %u\n",
+                (unsigned int)LDMA_CHANNEL_LEFT);
+    LDMA_CHANNEL_LEFT = ADC_INVALID_LDMA_CHANNEL;
+  }
+  if (LDMA_CHANNEL_RIGHT != ADC_INVALID_LDMA_CHANNEL) {
+    LDMA_StopTransfer((int)LDMA_CHANNEL_RIGHT);
+    (void)ldma_manager__set_callback(LDMA_CHANNEL_RIGHT, NULL, NULL);
+    adc__printf(true, "DEINITIALIZED RIGHT DMA CHANNEL: %u\n",
+                (unsigned int)LDMA_CHANNEL_RIGHT);
+    LDMA_CHANNEL_RIGHT = ADC_INVALID_LDMA_CHANNEL;
   }
 }
 
@@ -402,7 +398,7 @@ bool adc__get_new_data_ready_flag(uint32_t **new_data_pointer_return) {
   return false;
 }
 
-static void adc__wait_for_startup_validation(void) {
+static bool adc__wait_for_startup_validation(void) {
   uint32_t start_cycles = DWT->CYCCNT;
   uint32_t timeout_cycles = CMU_ClockFreqGet(cmuClock_CORE);
   bool left_ready_logged = false;
@@ -423,9 +419,8 @@ static void adc__wait_for_startup_validation(void) {
     }
 
     if ((uint32_t)(DWT->CYCCNT - start_cycles) > timeout_cycles) {
-      assert(0);
-      // printf("ADC startup buffers validation timeout\n");
-      // custom_assert(0, __FILE__, __LINE__);
+      adc__printf(true, "ADC startup buffers validation timeout\n");
+      return false;
     }
   }
 
@@ -433,42 +428,43 @@ static void adc__wait_for_startup_validation(void) {
 
   adc__printf(true, "ADC Left buffer preview:\n");
   adc__printf(true, " 0x%X, 0x%X, 0x%X, 0x%X\n",
-              (unsigned int)leftDmaPingPongBuffers[0][0],
-              (unsigned int)leftDmaPingPongBuffers[0][1],
-              (unsigned int)leftDmaPingPongBuffers[0][2],
-              (unsigned int)leftDmaPingPongBuffers[0][3]);
+              (unsigned int)leftBuffers[0].data[0],
+              (unsigned int)leftBuffers[0].data[1],
+              (unsigned int)leftBuffers[0].data[2],
+              (unsigned int)leftBuffers[0].data[3]);
   adc__printf(true, " 0x%X, 0x%X, 0x%X, 0x%X\n",
-              (unsigned int)leftDmaPingPongBuffers[0][4],
-              (unsigned int)leftDmaPingPongBuffers[0][5],
-              (unsigned int)leftDmaPingPongBuffers[0][6],
-              (unsigned int)leftDmaPingPongBuffers[0][7]);
+              (unsigned int)leftBuffers[0].data[4],
+              (unsigned int)leftBuffers[0].data[5],
+              (unsigned int)leftBuffers[0].data[6],
+              (unsigned int)leftBuffers[0].data[7]);
   adc__printf(true, " 0x%X, 0x%X, 0x%X, 0x%X\n",
-              (unsigned int)leftDmaPingPongBuffers[0][8],
-              (unsigned int)leftDmaPingPongBuffers[0][9],
-              (unsigned int)leftDmaPingPongBuffers[0][10],
-              (unsigned int)leftDmaPingPongBuffers[0][11]);
+              (unsigned int)leftBuffers[0].data[8],
+              (unsigned int)leftBuffers[0].data[9],
+              (unsigned int)leftBuffers[0].data[10],
+              (unsigned int)leftBuffers[0].data[11]);
 
   adc__printf(true, "ADC Right buffer preview:\n");
   adc__printf(true, " 0x%X, 0x%X, 0x%X, 0x%X\n",
-              (unsigned int)rightDmaPingPongBuffers[0][0],
-              (unsigned int)rightDmaPingPongBuffers[0][1],
-              (unsigned int)rightDmaPingPongBuffers[0][2],
-              (unsigned int)rightDmaPingPongBuffers[0][3]);
+              (unsigned int)rightBuffers[0].data[0],
+              (unsigned int)rightBuffers[0].data[1],
+              (unsigned int)rightBuffers[0].data[2],
+              (unsigned int)rightBuffers[0].data[3]);
   adc__printf(true, " 0x%X, 0x%X, 0x%X, 0x%X\n",
-              (unsigned int)rightDmaPingPongBuffers[0][4],
-              (unsigned int)rightDmaPingPongBuffers[0][5],
-              (unsigned int)rightDmaPingPongBuffers[0][6],
-              (unsigned int)rightDmaPingPongBuffers[0][7]);
+              (unsigned int)rightBuffers[0].data[4],
+              (unsigned int)rightBuffers[0].data[5],
+              (unsigned int)rightBuffers[0].data[6],
+              (unsigned int)rightBuffers[0].data[7]);
   adc__printf(true, " 0x%X, 0x%X, 0x%X, 0x%X\n",
-              (unsigned int)rightDmaPingPongBuffers[0][8],
-              (unsigned int)rightDmaPingPongBuffers[0][9],
-              (unsigned int)rightDmaPingPongBuffers[0][10],
-              (unsigned int)rightDmaPingPongBuffers[0][11]);
+              (unsigned int)rightBuffers[0].data[8],
+              (unsigned int)rightBuffers[0].data[9],
+              (unsigned int)rightBuffers[0].data[10],
+              (unsigned int)rightBuffers[0].data[11]);
 
   // adc__print_startup_buffer_preview("left", leftBuffer_to_process);
   // adc__print_startup_buffer_preview("right", rightBuffer_to_process);
 
   adc__printf(true, "ADC startup buffers validated\n");
+  return true;
 }
 
 static void adc__print_sample_format_summary(void) {
@@ -481,32 +477,42 @@ static void adc__print_sample_format_summary(void) {
 }
 
 static bool adc__start_left_dma_transfer(void) {
-  Ecode_t status = DMADRV_PeripheralMemoryPingPong(
-      LDMA_CHANNEL_LEFT, dmadrvPeripheralSignal_USART0_RXDATAV,
-      (void *)leftDmaPingPongBuffers[0], (void *)leftDmaPingPongBuffers[1],
-      (void *)&(USART0->RXDATA), true, ADC_BUFFER_SIZE, dmadrvDataSize1,
-      DMA_left_callback, NULL);
+  for (uint32_t i = 0; i < ADC_DMA_BUFFER_COUNT; i++) {
+    const int link_jump =
+        (i + 1u < ADC_DMA_BUFFER_COUNT) ? 1 : -((int)ADC_DMA_BUFFER_COUNT - 1);
+    leftDesc[i] = (LDMA_Descriptor_t)LDMA_DESCRIPTOR_LINKREL_P2M_BYTE(
+        &USART0->RXDATA, leftBuffers[i].data, ADC_BUFFER_SIZE, link_jump);
+  }
 
-  if (status != ECODE_EMDRV_DMADRV_OK) {
-    adc__printf(true, "LDMA left start error: %X\n", (unsigned int)status);
+  leftCfg =
+      (LDMA_TransferCfg_t)LDMA_TRANSFER_CFG_PERIPHERAL(ldmaPeripheralSignal_USART0_RXDATAV);
+
+  if (!ldma_manager__set_callback(LDMA_CHANNEL_LEFT, DMA_left_callback, NULL)) {
+    adc__printf(true, "LDMA left callback registration failed\n");
     return false;
   }
 
+  LDMA_StartTransfer((int)LDMA_CHANNEL_LEFT, &leftCfg, leftDesc);
   return true;
 }
 
 static bool adc__start_right_dma_transfer(void) {
-  Ecode_t status = DMADRV_PeripheralMemoryPingPong(
-      LDMA_CHANNEL_RIGHT, dmadrvPeripheralSignal_USART0_RXDATAVRIGHT,
-      (void *)rightDmaPingPongBuffers[0], (void *)rightDmaPingPongBuffers[1],
-      (void *)&(USART0->RXDATA), true, ADC_BUFFER_SIZE, dmadrvDataSize1,
-      DMA_right_callback, NULL);
+  for (uint32_t i = 0; i < ADC_DMA_BUFFER_COUNT; i++) {
+    const int link_jump =
+        (i + 1u < ADC_DMA_BUFFER_COUNT) ? 1 : -((int)ADC_DMA_BUFFER_COUNT - 1);
+    rightDesc[i] = (LDMA_Descriptor_t)LDMA_DESCRIPTOR_LINKREL_P2M_BYTE(
+        &USART0->RXDATA, rightBuffers[i].data, ADC_BUFFER_SIZE, link_jump);
+  }
 
-  if (status != ECODE_EMDRV_DMADRV_OK) {
-    adc__printf(true, "LDMA right start error: %X\n", (unsigned int)status);
+  rightCfg =
+      (LDMA_TransferCfg_t)LDMA_TRANSFER_CFG_PERIPHERAL(ldmaPeripheralSignal_USART0_RXDATAVRIGHT);
+
+  if (!ldma_manager__set_callback(LDMA_CHANNEL_RIGHT, DMA_right_callback, NULL)) {
+    adc__printf(true, "LDMA right callback registration failed\n");
     return false;
   }
 
+  LDMA_StartTransfer((int)LDMA_CHANNEL_RIGHT, &rightCfg, rightDesc);
   return true;
 }
 
@@ -539,7 +545,7 @@ static bool DMA_left_callback(unsigned int channel, unsigned int sequenceNo,
     return true;
   }
 
-  adc__store_completed_left_buffer(leftDmaPingPongBuffers[sequenceNo & 0x1]);
+  adc__mark_completed_left_buffer(sequenceNo % ADC_DMA_BUFFER_COUNT);
 
   return true;
 }
@@ -571,135 +577,61 @@ static bool DMA_right_callback(unsigned int channel, unsigned int sequenceNo,
       ADC_BUFFER_SIZE >> 2; // divide by sample size
   adc_counter_values[ADC_COUNTER_BYTES_RECEIVED_RIGHT] += ADC_BUFFER_SIZE;
 
-  adc__store_completed_right_buffer(rightDmaPingPongBuffers[sequenceNo & 0x1]);
+  adc__mark_completed_right_buffer(sequenceNo % ADC_DMA_BUFFER_COUNT);
 
   return true;
 }
 
-static void
-adc__store_completed_left_buffer(const volatile uint8_t *source_buffer) {
-  if ((leftBuffers[left_dma_buffer_index].used == true) &&
-      (leftBuffers[left_dma_buffer_index].processed == false)) {
+static void adc__mark_completed_left_buffer(uint32_t buffer_index) {
+  if (buffer_index >= ADC_DMA_BUFFER_COUNT) {
+    return;
+  }
+
+  if ((leftBuffers[buffer_index].used == true) &&
+      (leftBuffers[buffer_index].processed == false)) {
     adc__printf(true,
                 "ADC left DMA buffer %u not stale yet, overwriting oldest "
                 "unread data\n",
-                (unsigned int)left_dma_buffer_index);
+                (unsigned int)buffer_index);
+  } else {
+    adc_counter_values[ADC_COUNTER_LEFT_BUFFERS_IN_USE]++;
   }
 
-  memcpy((void *)leftBuffers[left_dma_buffer_index].data,
-         (const void *)source_buffer, ADC_BUFFER_SIZE);
-
-  leftBuffers[left_dma_buffer_index].used = true;
-  leftBuffers[left_dma_buffer_index].processed = false;
-  leftBuffers[left_dma_buffer_index].micros_timestamp =
-      adc__get_microsecond_ticks();
-  adc_counter_values[ADC_COUNTER_LEFT_BUFFERS_IN_USE]++;
+  leftBuffers[buffer_index].used = true;
+  leftBuffers[buffer_index].processed = false;
+  leftBuffers[buffer_index].micros_timestamp = adc__get_microsecond_ticks();
   adc__update_left_buffer_counters();
 
-  leftBuffer_to_process =
-      (volatile uint8_t *)leftBuffers[left_dma_buffer_index].data;
+  left_dma_buffer_index = buffer_index;
+  leftBuffer_to_process = (volatile uint8_t *)leftBuffers[buffer_index].data;
   new_data_pointer = (volatile uint32_t *)leftBuffer_to_process;
   new_data_ready_flag = true;
-
-  left_dma_buffer_index++;
-  if (left_dma_buffer_index >= ADC_DMA_BUFFER_COUNT) {
-    left_dma_buffer_index = 0;
-  }
 }
 
-static void
-adc__store_completed_right_buffer(const volatile uint8_t *source_buffer) {
-  (void)source_buffer;
+static void adc__mark_completed_right_buffer(uint32_t buffer_index) {
+  if (buffer_index >= ADC_DMA_BUFFER_COUNT) {
+    return;
+  }
 
-  if ((rightBuffers[right_dma_buffer_index].used == true) &&
-      (rightBuffers[right_dma_buffer_index].processed == false)) {
+  if ((rightBuffers[buffer_index].used == true) &&
+      (rightBuffers[buffer_index].processed == false)) {
     adc__printf(true,
                 "ADC right DMA buffer %u not stale yet, overwriting oldest "
                 "unread data\n",
-                (unsigned int)right_dma_buffer_index);
-  }
-
-  #define TEST_PIPELINE_8 0
-  #define TEST_PIPELINE_8_ADD_PADDING 0
-  #define TEST_PIPELINE_16 0
-  #define TEST_PIPELINE_16_ADD_PADDING 0
-  #define TEST_PIPELINE_32 0
-
-  const uint32_t sample_count = ADC_BUFFER_SIZE / sizeof(uint32_t);
-  
-  #if (TEST_PIPELINE_8 == 1)
-  static uint32_t test_counter = 0;
-  if (TEST_PIPELINE_8_ADD_PADDING == 1) {
-    volatile uint32_t *sample_buffer =
-        (volatile uint32_t *)rightBuffers[right_dma_buffer_index].data;
-    for (uint32_t i = 0; i < sample_count; i++) {
-      sample_buffer[i] = test_counter & 0xFF;
-      test_counter++;
-      if (test_counter > 0xFF) {
-        test_counter = 0;
-      }
-    }
+                (unsigned int)buffer_index);
   } else {
-    for (uint32_t i = 0; i < ADC_BUFFER_SIZE; i++) {
-      rightBuffers[right_dma_buffer_index].data[i] = test_counter & 0xFF;
-      test_counter++;
-      if (test_counter > 0xFF) {
-        test_counter = 0;
-      }
-    }
+    adc_counter_values[ADC_COUNTER_RIGHT_BUFFERS_IN_USE]++;
   }
-  #elif (TEST_PIPELINE_16 == 1)
-  static uint32_t test_counter = 0;
-  if (TEST_PIPELINE_16_ADD_PADDING == 1) {
-    volatile uint32_t *sample_buffer =
-        (volatile uint32_t *)rightBuffers[right_dma_buffer_index].data;
-    for (uint32_t i = 0; i < sample_count; i++) {
-      sample_buffer[i] = test_counter & 0xFFFF;
-      test_counter++;
-      if (test_counter > 0xFFFF) {
-        test_counter = 0;
-      }
-    }
-  } else {
-    volatile uint16_t *sample_buffer =
-        (volatile uint16_t *)rightBuffers[right_dma_buffer_index].data;
-    for (uint32_t i = 0; i < (ADC_BUFFER_SIZE / sizeof(uint16_t)); i++) {
-      sample_buffer[i] = (uint16_t)test_counter;
-      test_counter++;
-      if (test_counter > 0xFFFF) {
-        test_counter = 0;
-      }
-    }
-  }
-  #elif (TEST_PIPELINE_32 == 1)
-  static uint32_t test_counter = 0;
-  volatile uint32_t *sample_buffer =
-      (volatile uint32_t *)rightBuffers[right_dma_buffer_index].data;
-  for (uint32_t i = 0; i < (ADC_BUFFER_SIZE / sizeof(uint32_t)); i++) {
-    sample_buffer[i] = test_counter;
-    test_counter++;
-  }
-  #else
-  memcpy((void *)rightBuffers[right_dma_buffer_index].data,
-         (const void *)source_buffer, ADC_BUFFER_SIZE);
-  #endif
 
-  rightBuffers[right_dma_buffer_index].used = true;
-  rightBuffers[right_dma_buffer_index].processed = false;
-  rightBuffers[right_dma_buffer_index].micros_timestamp =
-      adc__get_microsecond_ticks();
-  adc_counter_values[ADC_COUNTER_RIGHT_BUFFERS_IN_USE]++;
+  rightBuffers[buffer_index].used = true;
+  rightBuffers[buffer_index].processed = false;
+  rightBuffers[buffer_index].micros_timestamp = adc__get_microsecond_ticks();
   adc__update_right_buffer_counters();
 
-  rightBuffer_to_process =
-      (volatile uint8_t *)rightBuffers[right_dma_buffer_index].data;
+  right_dma_buffer_index = buffer_index;
+  rightBuffer_to_process = (volatile uint8_t *)rightBuffers[buffer_index].data;
   new_data_pointer = (volatile uint32_t *)rightBuffer_to_process;
   new_data_ready_flag = true;
-
-  right_dma_buffer_index++;
-  if (right_dma_buffer_index >= ADC_DMA_BUFFER_COUNT) {
-    right_dma_buffer_index = 0;
-  }
 }
 
 /**
@@ -727,7 +659,7 @@ void USART0_RX_IRQHandler(void) {
  * @param None
  * @return void
  */
-void adc__init_i2s(void) {
+static bool adc__init_i2s(void) {
   CMU_ClockEnable(cmuClock_GPIO, true);
   CMU_ClockEnable(cmuClock_USART0, true);
 
@@ -792,6 +724,7 @@ void adc__init_i2s(void) {
   // NVIC_ClearPendingIRQ(USART0_TX_IRQn);
   NVIC_EnableIRQ(USART0_RX_IRQn);
   // NVIC_EnableIRQ(USART0_TX_IRQn);
+  return true;
 }
 
 /**
@@ -804,48 +737,39 @@ void adc__init_i2s(void) {
  * @param None
  * @return void
  */
-void adc__ldma_init(void) {
+static bool adc__ldma_init(void) {
   CMU_ClockEnable(cmuClock_LDMA, true);
-  Ecode_t DMADRV_return_status;
+  // Ecode_t DMADRV_return_status;
 
-  DMADRV_return_status = DMADRV_Init();
-  if ((DMADRV_return_status != ECODE_EMDRV_DMADRV_OK) &&
-      (DMADRV_return_status != ECODE_EMDRV_DMADRV_ALREADY_INITIALIZED)) {
-    adc__printf(true, "DMADRV init failed: %X\n",
-                (unsigned int)DMADRV_return_status);
-    assert(0);
-  }
+  // DMADRV_return_status = DMADRV_Init();
+  // if ((DMADRV_return_status != ECODE_EMDRV_DMADRV_OK) &&
+  //     (DMADRV_return_status != ECODE_EMDRV_DMADRV_ALREADY_INITIALIZED)) {
+  //   adc__printf(true, "DMADRV init failed: %X\n",
+  //               (unsigned int)DMADRV_return_status);
+  //   assert(0);
+  // }
 
-  DMADRV_return_status = DMADRV_AllocateChannel(&LDMA_CHANNEL_LEFT, NULL);
-  if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK) {
-    adc__printf(true, "Allocate Error: %X\n",
-                (unsigned int)DMADRV_return_status);
-    assert(0);
+  if ((LDMA_CHANNEL_LEFT == ADC_INVALID_LDMA_CHANNEL) ||
+      (LDMA_CHANNEL_RIGHT == ADC_INVALID_LDMA_CHANNEL)) {
+    adc__printf(true, "ADC LDMA channels not assigned\n");
+    return false;
   }
-  adc__printf(true, "Got RX Left DMA Channel: %u\n",
-              (unsigned int)LDMA_CHANNEL_LEFT);
-
-  DMADRV_return_status = DMADRV_AllocateChannel(&LDMA_CHANNEL_RIGHT, NULL);
-  if (DMADRV_return_status != ECODE_EMDRV_DMADRV_OK) {
-    adc__printf(true, "Allocate Error: %X\n",
-                (unsigned int)DMADRV_return_status);
-    assert(0);
-  }
-  adc__printf(true, "Got RX Right DMA Channel: %u\n",
-              (unsigned int)LDMA_CHANNEL_RIGHT);
 
   left_dma_buffer_index = 0;
   right_dma_buffer_index = 0;
 
   if (adc__start_left_dma_transfer() == false) {
-    assert(0);
+    adc__printf(true, "ADC left LDMA transfer start failed\n");
+    return false;
   }
   adc__printf(true, "Started LDMA_CHANNEL_RX_LEFT\n");
 
   if (adc__start_right_dma_transfer() == false) {
-    assert(0);
+    adc__printf(true, "ADC right LDMA transfer start failed\n");
+    return false;
   }
   adc__printf(true, "Started LDMA_CHANNEL_RX_RIGHT\n");
+  return true;
 }
 
 

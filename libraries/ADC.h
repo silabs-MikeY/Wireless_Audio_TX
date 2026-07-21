@@ -8,7 +8,8 @@
 // #include "radio.h"
 
 bool adc__get_new_data_ready_flag(uint32_t** new_data_pointer_return);
-void adc__init(bool is_stereo);
+bool adc__init(bool is_stereo, unsigned int ldma_channel_left,
+               unsigned int ldma_channel_right);
 void adc__deinit(void);
 bool adc__get_audio_stereo_flag(void);
 bool adc__get_new_packet_ready_for_processing(uint8_t** data_pointer);

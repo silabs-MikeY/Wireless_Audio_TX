@@ -3,6 +3,8 @@
 
 #include <string.h>
 
+#define RADIO_STATISTICS_PRINT_DELTA_VIOLATIONS 0
+
 __attribute__((weak)) void radio_statistics__printf(bool add_timestamp, const char *format, ...)
 {
   (void)add_timestamp;
@@ -166,7 +168,7 @@ void radio_statistics__set_audio_mode(bool is_stereo, bool encoder_enabled) {
                     ->acceptable_tx_microsecond_delta_lower);
 }
 
-void radio_statistics__init(void) {
+bool radio_statistics__init(void) {
     radio_statistics__printf(true, "Init Radio Statistics\n");
   memset((void *)&transmit_statistics, 0, sizeof(transmit_statistics_t));
     radio_statistics__reset_counters();
@@ -176,6 +178,7 @@ void radio_statistics__init(void) {
     transmit_statistics.moving_average_tx_delta = 0;
   radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_MOVING_AVERAGE_TX_DELTA] =
       transmit_statistics.moving_average_tx_delta;
+  return true;
 }
 
 void radio_statistics__reset_radio_statistics_for_new_measurement(void) {
@@ -241,9 +244,11 @@ bool radio_statistics__note_successful_tx(uint32_t sequence_number,
         .tx_timestamp = timestamp_of_tx;
     transmit_statistics.bad_timestamps_count++;
     radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_BAD_TIMESTAMPS_COUNT] = transmit_statistics.bad_timestamps_count;
+#if (RADIO_STATISTICS_PRINT_DELTA_VIOLATIONS == 1)
     radio_statistics__printf(true, "-  New Max Delta: %u  Seq : %u\n",
                   (unsigned int)transmit_statistics.max_tx_timestamp_delta,
                   sequence_number);
+#endif
   } else if (tx_delta <
              stereo_or_mono_config->acceptable_tx_microsecond_delta_lower) {
     if (transmit_statistics.bad_timestamps_count >= BAD_TIMESTAMPS_SIZE) {
@@ -261,9 +266,11 @@ bool radio_statistics__note_successful_tx(uint32_t sequence_number,
         .tx_timestamp = timestamp_of_tx;
     transmit_statistics.bad_timestamps_count++;
     radio_statistics_counter_values[RADIO_STATISTICS_COUNTER_BAD_TIMESTAMPS_COUNT] = transmit_statistics.bad_timestamps_count;
+#if (RADIO_STATISTICS_PRINT_DELTA_VIOLATIONS == 1)
     radio_statistics__printf(true, "-  New Min Delta: %u  Seq : %u\n",
                   (unsigned int)transmit_statistics.min_tx_timestamp_delta,
                   sequence_number);
+#endif
   }
 
   transmit_statistics.last_tx_timestamp_micros = timestamp_of_tx;

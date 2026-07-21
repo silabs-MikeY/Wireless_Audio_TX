@@ -128,12 +128,12 @@ void radio_transmit__buffers_reset(void)
  * @param None
  * @return void
  */
-void radio_transmit__init(void)
+bool radio_transmit__init(void)
 {
     radio_transmit__reset_counters();
     radio_transmit__buffers_reset();
 
-    RAIL_Handle_t *rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_INST);
+    RAIL_Handle_t *rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_RAIL_HANDLE_INST);
 
     RAIL_ConfigEvents(rail_handle, RAIL_EVENTS_ALL, RAIL_EVENTS_ALL);
 
@@ -141,7 +141,7 @@ void radio_transmit__init(void)
     if (RAIL_SetTxFifo_return < RADIO_PAYLOAD_SIZE)
     {
         radio__printf(true, "RAIL_SetTxFifo Failed. Requested : %u Bytes, Got %u Bytes \n", (unsigned int)RADIO_FIFO_SIZE, (unsigned int)RAIL_SetTxFifo_return);
-        assert(0);
+        return false;
     }
     radio__printf(true, "RAIL_SetTxFifo Success, %u Bytes\n", (unsigned int)RAIL_SetTxFifo_return);
     radio_tx_fifo_Size = RAIL_SetTxFifo_return;
@@ -150,9 +150,10 @@ void radio_transmit__init(void)
     if (RAIL_SetTxPowerDbm_return != RAIL_STATUS_NO_ERROR)
     {
         radio__printf(true, "RAIL_SetTxPowerDbm failed, Status Code: %X\n", (unsigned int)RAIL_SetTxPowerDbm_return);
-        assert(0);
+        return false;
     }
     radio__printf(true, "RAIL_SetTxPowerDbm Success\n");
+    return true;
 }
 
 __attribute__((weak)) void radio_transmit__handle_successful_packet_sent(uint32_t packet_buffer_index)
@@ -180,7 +181,7 @@ static bool radio_transmit__send_packet(uint32_t buffer_index, bool retry)
 
     //  printf_to_buf_append_time(0,"Trying to Send buffer %u - Sequence : %u\n", (unsigned int)buffer_index, (unsigned int)radio_tx_packet_buffer[buffer_index].payload.header.sequence_number);
 
-    RAIL_Handle_t *rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_INST);
+    RAIL_Handle_t *rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_RAIL_HANDLE_INST);
     bool return_value = false;
 
     header_t new_header_copy;
@@ -232,9 +233,12 @@ static bool radio_transmit__send_packet(uint32_t buffer_index, bool retry)
         tx_retry__increment_counter(TX_RETRY_COUNTER_ATTEMPTS);
     }
 
+    // radio__printf(true, "Sending Packet: Buffer Index: %u, Sequence Number: %u, Retry: %s\n", (unsigned int)buffer_index, (unsigned int)new_header_copy.sequence_number, retry ? "true" : "false");
+
     RAIL_Status_t RAIL_StartTx_return = RAIL_StartTx(rail_handle, radio__get_channel(), RAIL_TX_OPTIONS_DEFAULT, NULL);
     if (RAIL_StartTx_return == SL_STATUS_OK)
     {
+        // radio__printf(true, "RAIL_StartTx Success: Buffer Index: %u, Sequence Number: %u, Retry: %s\n", (unsigned int)buffer_index, (unsigned int)new_header_copy.sequence_number, retry ? "true" : "false");
         tx_packet_in_flight_info.packet_buffer_index = buffer_index;
         tx_packet_in_flight_info.retry = retry;
         tx_packet_in_flight_info.in_flight = true;
@@ -253,6 +257,13 @@ static bool radio_transmit__send_packet(uint32_t buffer_index, bool retry)
     }
     else
     {
+        radio__printf(0, "RAIL_StartTx Failed: 0x%X\n", (unsigned int)RAIL_StartTx_return);
+        radio__printf(0, "- Buffer Index: %u, Sequence Number: %u\n", (unsigned int)buffer_index, (unsigned int)radio_tx_packet_buffer[buffer_index].payload.header.sequence_number);
+        radio__printf(0, "- Packet Size: %u, Left Data Size: %u, Right Data Size: %u\n", (unsigned int)new_header_copy.size, (unsigned int)RADIO_PACKET_DATA_SIZE_PER_CHANNEL, (unsigned int)RADIO_PACKET_DATA_SIZE_PER_CHANNEL);
+        radio__printf(0, "- Packet Size Length Field: %u\n", (unsigned int)new_header_copy.size);
+        radio__printf(0, "- Control Bits: 0x%X\n", (unsigned int)new_header_copy.control_bits);
+        radio__printf(0, "- Channel: %u\n", (unsigned int)radio__get_channel());
+
         radio_transmit__increment_counter(number_of_TX_attempt_failed);
         radio_packet_buffers__mark_packet_buffer_failed(buffer_index);
         //      printf_to_buf_append_time(0,"Time: %u - ", (unsigned int)get_millisecond_ticks());
@@ -505,6 +516,8 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
     {
         if (events & RAIL_EVENTS_TX_COMPLETION)
         {
+            radio__printf(true, "TX Failed: 0x%u:\n", (long long unsigned int)events);
+                
             tx_packet_in_flight_info.in_flight = false;
             radio_packet_buffers__mark_packet_buffer_failed(tx_packet_in_flight_info.packet_buffer_index);
             // debug__log_TX_fail(tx_packet_in_flight_info.retry);
@@ -518,6 +531,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
             }
             if (events & RAIL_EVENT_TX_ABORTED)
             {
+                radio__printf(true, "TX Aborted: 0x%u:\n", (long long unsigned int)events);
                 // debug__log_TX_abort(tx_packet_in_flight_info.retry);
                 if (retry)
                 {
@@ -531,6 +545,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
             else if (events & RAIL_EVENT_TX_BLOCKED)
             {
                 // debug__log_TX_block(tx_packet_in_flight_info.retry);
+                radio__printf(true, "TX Blocked: 0x%u:\n", (long long unsigned int)events);
                 if (retry)
                 {
                     tx_retry__increment_counter(TX_RETRY_COUNTER_FAIL_BLOCK);
@@ -542,7 +557,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
             }
             else if (events & RAIL_EVENT_TX_UNDERFLOW)
             {
-                // debug__log_TX_underflow(tx_packet_in_flight_info.retry);
+                radio__printf(true, "TX Underflow: 0x%u:\n", (long long unsigned int)events);
                 if (retry)
                 {
                     tx_retry__increment_counter(TX_RETRY_COUNTER_FAIL_UNDERFLOW);
@@ -554,7 +569,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
             }
             else if (events & RAIL_EVENT_TX_SCHEDULED_TX_MISSED)
             {
-                // debug__log_TX_missed(tx_packet_in_flight_info.retry);
+                radio__printf(true, "TX Missed: 0x%u:\n", (long long unsigned int)events);
                 if (retry)
                 {
                     tx_retry__increment_counter(TX_RETRY_COUNTER_FAIL_MISSED);
@@ -566,7 +581,7 @@ bool radio__process_event_tx(RAIL_Handle_t rail_handle, RAIL_Events_t events)
             }
             else if (events & RAIL_EVENT_TX_CHANNEL_BUSY)
             {
-                // debug__log_TX_busy(tx_packet_in_flight_info.retry);
+                radio__printf(true, "TX Busy: 0x%u:\n", (long long unsigned int)events);
                 if (retry)
                 {
                     tx_retry__increment_counter(TX_RETRY_COUNTER_FAIL_BUSY);

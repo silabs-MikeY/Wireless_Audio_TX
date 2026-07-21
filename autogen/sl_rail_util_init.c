@@ -67,13 +67,13 @@
 #endif
 
 #if 0U \
-  || SL_RAIL_UTIL_INIT_RADIO_CONFIG_SUPPORT_INST_ENABLE \
+  || SL_RAIL_UTIL_INIT_RADIO_CONFIG_SUPPORT_RAIL_HANDLE_INST_ENABLE \
   || 0U
   #include "rail_config.h"
 #endif
 
-// Instance: inst
-static RAIL_Handle_t sl_rail_handle_inst = RAIL_EFR32_HANDLE;
+// Instance: rail_handle_inst
+static RAIL_Handle_t sl_rail_handle_rail_handle_inst = RAIL_EFR32_HANDLE;
 
 #if defined(SL_CATALOG_TIMING_TEST_PRESENT) && !SL_RAIL_LIB_MULTIPROTOCOL_SUPPORT
 uint32_t sli_timing_start_tick = 0U;
@@ -101,9 +101,9 @@ static void setupTimingTestTimer(void)
 }
 #endif
 
-static void sl_rail_util_init_inst(void)
+static void sl_rail_util_init_rail_handle_inst(void)
 {
-#if SL_RAIL_UTIL_INIT_INST_ENABLE
+#if SL_RAIL_UTIL_INIT_RAIL_HANDLE_INST_ENABLE
   RAIL_Status_t status;
   RAIL_Config_t sl_rail_config = {
     .eventsCallback = &sli_rail_util_on_event,
@@ -114,104 +114,104 @@ static void sl_rail_util_init_inst(void)
   setupTimingTestTimer();
   sli_timing_start_tick = timer->CNT;
 #endif // SL_CATALOG_TIMING_TEST_PRESENT
-  sl_rail_handle_inst = RAIL_Init(&sl_rail_config,
-#if SL_RAIL_UTIL_INIT_INIT_COMPLETE_CALLBACK_INST_ENABLE
+  sl_rail_handle_rail_handle_inst = RAIL_Init(&sl_rail_config,
+#if SL_RAIL_UTIL_INIT_INIT_COMPLETE_CALLBACK_RAIL_HANDLE_INST_ENABLE
                              &sli_rail_util_on_rf_ready
 #else
                              NULL
-#endif // SL_RAIL_UTIL_INIT_INIT_COMPLETE_CALLBACK_INST_ENABLE
+#endif // SL_RAIL_UTIL_INIT_INIT_COMPLETE_CALLBACK_RAIL_HANDLE_INST_ENABLE
                              );
 #ifdef SL_CATALOG_TIMING_TEST_PRESENT
   sli_timing_end_tick = timer->CNT;
 #endif // SL_CATALOG_TIMING_TEST_PRESENT
-  APP_ASSERT((NULL != sl_rail_handle_inst),
+  APP_ASSERT((NULL != sl_rail_handle_rail_handle_inst),
              "RAIL_Init failed, return value: NULL");
 
-#if SL_RAIL_UTIL_INIT_DATA_FORMATS_INST_ENABLE
+#if SL_RAIL_UTIL_INIT_DATA_FORMATS_RAIL_HANDLE_INST_ENABLE
   RAIL_DataConfig_t data_config = {
-    .txSource = SL_RAIL_UTIL_INIT_DATA_FORMAT_INST_TX_SOURCE,
-    .rxSource = SL_RAIL_UTIL_INIT_DATA_FORMAT_INST_RX_SOURCE,
-    .txMethod = SL_RAIL_UTIL_INIT_DATA_FORMAT_INST_TX_MODE,
-    .rxMethod = SL_RAIL_UTIL_INIT_DATA_FORMAT_INST_RX_MODE,
+    .txSource = SL_RAIL_UTIL_INIT_DATA_FORMAT_RAIL_HANDLE_INST_TX_SOURCE,
+    .rxSource = SL_RAIL_UTIL_INIT_DATA_FORMAT_RAIL_HANDLE_INST_RX_SOURCE,
+    .txMethod = SL_RAIL_UTIL_INIT_DATA_FORMAT_RAIL_HANDLE_INST_TX_MODE,
+    .rxMethod = SL_RAIL_UTIL_INIT_DATA_FORMAT_RAIL_HANDLE_INST_RX_MODE,
   };
-  status = RAIL_ConfigData(sl_rail_handle_inst, &data_config);
+  status = RAIL_ConfigData(sl_rail_handle_rail_handle_inst, &data_config);
   APP_ASSERT((RAIL_STATUS_NO_ERROR == status),
              "RAIL_ConfigData failed, return value: 0x%04" PRIX32,
              status);
-#endif // SL_RAIL_UTIL_INIT_DATA_FORMATS_INST_ENABLE
+#endif // SL_RAIL_UTIL_INIT_DATA_FORMATS_RAIL_HANDLE_INST_ENABLE
 
-#if SL_RAIL_UTIL_INIT_PROTOCOLS_INST_ENABLE
+#if SL_RAIL_UTIL_INIT_PROTOCOLS_RAIL_HANDLE_INST_ENABLE
   const RAIL_ChannelConfig_t *channel_config = NULL;
-  if (SL_RAIL_UTIL_INIT_PROTOCOL_INST_DEFAULT
+  if (SL_RAIL_UTIL_INIT_PROTOCOL_RAIL_HANDLE_INST_DEFAULT
       == SL_RAIL_UTIL_PROTOCOL_PROPRIETARY) {
-#if SL_RAIL_UTIL_INIT_RADIO_CONFIG_SUPPORT_INST_ENABLE
-    channel_config = channelConfigs[SL_RAIL_UTIL_INIT_PROTOCOL_PROPRIETARY_INST_INDEX];
-#else // !SL_RAIL_UTIL_INIT_RADIO_CONFIG_SUPPORT_INST_ENABLE
+#if SL_RAIL_UTIL_INIT_RADIO_CONFIG_SUPPORT_RAIL_HANDLE_INST_ENABLE
+    channel_config = channelConfigs[SL_RAIL_UTIL_INIT_PROTOCOL_PROPRIETARY_RAIL_HANDLE_INST_INDEX];
+#else // !SL_RAIL_UTIL_INIT_RADIO_CONFIG_SUPPORT_RAIL_HANDLE_INST_ENABLE
     APP_ASSERT(false,
-               "SL_RAIL_UTIL_INIT_RADIO_CONFIG_SUPPORT_INST_ENABLE must be true when (SL_RAIL_UTIL_INIT_PROTOCOL_INST_DEFAULT == SL_RAIL_UTIL_PROTOCOL_PROPRIETARY)");
-#endif // SL_RAIL_UTIL_INIT_RADIO_CONFIG_SUPPORT_INST_ENABLE
+               "SL_RAIL_UTIL_INIT_RADIO_CONFIG_SUPPORT_RAIL_HANDLE_INST_ENABLE must be true when (SL_RAIL_UTIL_INIT_PROTOCOL_RAIL_HANDLE_INST_DEFAULT == SL_RAIL_UTIL_PROTOCOL_PROPRIETARY)");
+#endif // SL_RAIL_UTIL_INIT_RADIO_CONFIG_SUPPORT_RAIL_HANDLE_INST_ENABLE
   }
-  (void) RAIL_ConfigChannels(sl_rail_handle_inst,
+  (void) RAIL_ConfigChannels(sl_rail_handle_rail_handle_inst,
                              channel_config,
                              &sli_rail_util_on_channel_config_change);
-  status = sl_rail_util_protocol_config(sl_rail_handle_inst,
-                                        SL_RAIL_UTIL_INIT_PROTOCOL_INST_DEFAULT);
+  status = sl_rail_util_protocol_config(sl_rail_handle_rail_handle_inst,
+                                        SL_RAIL_UTIL_INIT_PROTOCOL_RAIL_HANDLE_INST_DEFAULT);
   APP_ASSERT((RAIL_STATUS_NO_ERROR == status),
              "sl_rail_util_protocol_config failed, return value: 0x%04" PRIX32,
              status);
-#endif // SL_RAIL_UTIL_INIT_PROTOCOLS_INST_ENABLE
+#endif // SL_RAIL_UTIL_INIT_PROTOCOLS_RAIL_HANDLE_INST_ENABLE
 
-#if SL_RAIL_UTIL_INIT_CALIBRATIONS_INST_ENABLE
-  status = RAIL_ConfigCal(sl_rail_handle_inst,
+#if SL_RAIL_UTIL_INIT_CALIBRATIONS_RAIL_HANDLE_INST_ENABLE
+  status = RAIL_ConfigCal(sl_rail_handle_rail_handle_inst,
                           0U
-                          | (SL_RAIL_UTIL_INIT_CALIBRATION_TEMPERATURE_NOTIFY_INST_ENABLE
+                          | (SL_RAIL_UTIL_INIT_CALIBRATION_TEMPERATURE_NOTIFY_RAIL_HANDLE_INST_ENABLE
                              ? RAIL_CAL_TEMP : 0U)
-                          | (SL_RAIL_UTIL_INIT_CALIBRATION_ONETIME_NOTIFY_INST_ENABLE
+                          | (SL_RAIL_UTIL_INIT_CALIBRATION_ONETIME_NOTIFY_RAIL_HANDLE_INST_ENABLE
                              ? RAIL_CAL_ONETIME : 0U));
   APP_ASSERT((RAIL_STATUS_NO_ERROR == status),
              "RAIL_ConfigCal failed, return value: 0x%04" PRIX32,
              status);
-#endif // SL_RAIL_UTIL_INIT_CALIBRATIONS_INST_ENABLE
+#endif // SL_RAIL_UTIL_INIT_CALIBRATIONS_RAIL_HANDLE_INST_ENABLE
 
-#if SL_RAIL_UTIL_INIT_EVENTS_INST_ENABLE
-  status = RAIL_ConfigEvents(sl_rail_handle_inst,
+#if SL_RAIL_UTIL_INIT_EVENTS_RAIL_HANDLE_INST_ENABLE
+  status = RAIL_ConfigEvents(sl_rail_handle_rail_handle_inst,
                              RAIL_EVENTS_ALL,
-                             SL_RAIL_UTIL_INIT_EVENT_INST_MASK);
+                             SL_RAIL_UTIL_INIT_EVENT_RAIL_HANDLE_INST_MASK);
   APP_ASSERT((RAIL_STATUS_NO_ERROR == status),
              "RAIL_ConfigEvents failed, return value: 0x%04" PRIX32,
              status);
-#endif // SL_RAIL_UTIL_INIT_EVENTS_INST_ENABLE
+#endif // SL_RAIL_UTIL_INIT_EVENTS_RAIL_HANDLE_INST_ENABLE
 
-#if SL_RAIL_UTIL_INIT_TRANSITIONS_INST_ENABLE
+#if SL_RAIL_UTIL_INIT_TRANSITIONS_RAIL_HANDLE_INST_ENABLE
   RAIL_StateTransitions_t tx_transitions = {
-    .success = SL_RAIL_UTIL_INIT_TRANSITION_INST_TX_SUCCESS,
-    .error = SL_RAIL_UTIL_INIT_TRANSITION_INST_TX_ERROR
+    .success = SL_RAIL_UTIL_INIT_TRANSITION_RAIL_HANDLE_INST_TX_SUCCESS,
+    .error = SL_RAIL_UTIL_INIT_TRANSITION_RAIL_HANDLE_INST_TX_ERROR
   };
   RAIL_StateTransitions_t rx_transitions = {
-    .success = SL_RAIL_UTIL_INIT_TRANSITION_INST_RX_SUCCESS,
-    .error = SL_RAIL_UTIL_INIT_TRANSITION_INST_RX_ERROR
+    .success = SL_RAIL_UTIL_INIT_TRANSITION_RAIL_HANDLE_INST_RX_SUCCESS,
+    .error = SL_RAIL_UTIL_INIT_TRANSITION_RAIL_HANDLE_INST_RX_ERROR
   };
-  status = RAIL_SetTxTransitions(sl_rail_handle_inst,
+  status = RAIL_SetTxTransitions(sl_rail_handle_rail_handle_inst,
                                  &tx_transitions);
   APP_ASSERT((RAIL_STATUS_NO_ERROR == status),
              "RAIL_SetTxTransitions failed, return value: 0x%04" PRIX32,
              status);
-  status = RAIL_SetRxTransitions(sl_rail_handle_inst,
+  status = RAIL_SetRxTransitions(sl_rail_handle_rail_handle_inst,
                                  &rx_transitions);
   APP_ASSERT((RAIL_STATUS_NO_ERROR == status),
              "RAIL_SetRxTransitions failed, return value: 0x%04" PRIX32,
              status);
-#endif // SL_RAIL_UTIL_INIT_TRANSITIONS_INST_ENABLE
-#else // !SL_RAIL_UTIL_INIT_INST_ENABLE
+#endif // SL_RAIL_UTIL_INIT_TRANSITIONS_RAIL_HANDLE_INST_ENABLE
+#else // !SL_RAIL_UTIL_INIT_RAIL_HANDLE_INST_ENABLE
   // Eliminate compiler warnings.
-  (void) sl_rail_handle_inst;
-#endif // SL_RAIL_UTIL_INIT_INST_ENABLE
+  (void) sl_rail_handle_rail_handle_inst;
+#endif // SL_RAIL_UTIL_INIT_RAIL_HANDLE_INST_ENABLE
 }
 
 RAIL_Handle_t sl_rail_util_get_handle(sl_rail_util_handle_type_t handle)
 {
   RAIL_Handle_t *sl_rail_handle_array[] = {
-    &sl_rail_handle_inst,
+    &sl_rail_handle_rail_handle_inst,
   };
   return *sl_rail_handle_array[handle];
 }
@@ -252,5 +252,5 @@ void sl_rail_util_init(void)
   }
 #endif
 #endif
-  sl_rail_util_init_inst();
+  sl_rail_util_init_rail_handle_inst();
 }

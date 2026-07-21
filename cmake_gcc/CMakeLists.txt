@@ -12,12 +12,18 @@ project(
 # which contains the content of the SLC project
 include(TX_Board.cmake)
 
+target_include_directories(slc PUBLIC
+    "../libraries"
+    "../radio"
+)
+
 add_executable(TX_Board
     # Add additional sources here
 )
 
 target_include_directories(TX_Board PUBLIC
     # Add additional include paths here
+    "../libraries"
 )
 
 target_compile_definitions(TX_Board PUBLIC
@@ -41,6 +47,44 @@ target_link_libraries(TX_Board PRIVATE
 include(TX_Board_project.cmake OPTIONAL RESULT_VARIABLE managed_project)
 if(managed_project)
     message(STATUS "Using managed project content from ${managed_project}")
+endif()
+
+# Simplicity Studio regenerates TX_Board_project.cmake when build settings
+# change, so keep hand-maintained application libraries here instead.
+set(TX_BOARD_LIBRARY_SOURCES
+    "../libraries/ADC.c"
+    "../libraries/RGB.c"
+    "../libraries/VDAC.c"
+    "../libraries/adpcm.c"
+    "../libraries/button.c"
+    "../libraries/console_tx.c"
+    "../libraries/counters_new.c"
+    "../libraries/events_print.c"
+    "../libraries/generic.c"
+    "../libraries/ldma_manager.c"
+    "../libraries/microseconds.c"
+    "../libraries/print.c"
+    "../libraries/scheduler.c"
+    "../libraries/wdog.c"
+)
+
+get_target_property(TX_BOARD_EXISTING_SOURCES TX_Board SOURCES)
+if(NOT TX_BOARD_EXISTING_SOURCES)
+    set(TX_BOARD_EXISTING_SOURCES)
+endif()
+
+foreach(source_file IN LISTS TX_BOARD_LIBRARY_SOURCES)
+    list(FIND TX_BOARD_EXISTING_SOURCES "${source_file}" source_index)
+    if(source_index EQUAL -1)
+        target_sources(TX_Board PRIVATE "${source_file}")
+        list(APPEND TX_BOARD_EXISTING_SOURCES "${source_file}")
+    endif()
+endforeach()
+
+list(FIND TX_BOARD_EXISTING_SOURCES "../timer_helper.c" root_timer_helper_index)
+list(FIND TX_BOARD_EXISTING_SOURCES "../libraries/timer_helper.c" library_timer_helper_index)
+if((root_timer_helper_index EQUAL -1) AND (library_timer_helper_index EQUAL -1))
+    target_sources(TX_Board PRIVATE "../libraries/timer_helper.c")
 endif()
 
 # Force the gcc linker command

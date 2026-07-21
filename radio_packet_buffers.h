@@ -9,7 +9,7 @@
 extern packet_buffer_t radio_tx_packet_buffer[NUMBER_OF_PACKET_BUFFERS];
 extern uint32_t packet_buffer_head;
 
-void radio_packet_buffers__init(void);
+bool radio_packet_buffers__init(void);
 void radio_packet_buffers__get_oldest_packet_to_send(packet_buffer_t **packet_buffer, uint32_t *packet_buffer_index);
 bool radio_packet_buffers__request_available_packet_buffer(packet_buffer_t **packet_buffer, uint32_t *packet_buffer_index);
 bool radio_packet_buffers__mark_packet_buffer_used(uint32_t packet_buffer_index);

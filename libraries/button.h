@@ -3,7 +3,7 @@
 
 #include <stdbool.h>
 
-void button__init(void);
+bool button__init(void);
 void button__deinit(void);
 void button__printf(bool add_timestamp, const char *format, ...);
 void button__rising_edge(void);

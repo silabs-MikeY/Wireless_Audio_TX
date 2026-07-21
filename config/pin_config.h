@@ -125,22 +125,6 @@
 // [I2C0]$
 
 // $[EUSART0]
-// EUSART0 RX on PA08
-#ifndef EUSART0_RX_PORT                         
-#define EUSART0_RX_PORT                          SL_GPIO_PORT_A
-#endif
-#ifndef EUSART0_RX_PIN                          
-#define EUSART0_RX_PIN                           8
-#endif
-
-// EUSART0 TX on PA07
-#ifndef EUSART0_TX_PORT                         
-#define EUSART0_TX_PORT                          SL_GPIO_PORT_A
-#endif
-#ifndef EUSART0_TX_PIN                          
-#define EUSART0_TX_PIN                           7
-#endif
-
 // [EUSART0]$
 
 // $[PTI]

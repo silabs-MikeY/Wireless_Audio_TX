@@ -13,6 +13,8 @@ volatile bool request_channel_increment_flag = false;
 static volatile bool radio_calibration_pending = false;
 static RAIL_CalValues_t radio_calibration_values = RAIL_CALVALUES_UNINIT;
 
+RAIL_Handle_t *rail_handle = NULL;
+
 #define ENABLE_PRS 0
 
 #if (ENABLE_PRS == 1)
@@ -157,17 +159,29 @@ void radio__reset_channel_changed_flag(void)
  * @param None
  * @return void
  */
-void radio__init(void)
+bool radio__init(void)
 {
-  RAIL_Handle_t *rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_INST);
+  rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_RAIL_HANDLE_INST);
+  if (rail_handle == NULL)
+  {
+    radio__printf(true, "RAIL Handle is NULL. Radio initialization failed.\n");
+    return false;
+  }
 
   RAIL_ConfigEvents(rail_handle, RAIL_EVENTS_ALL, RAIL_EVENTS_ALL);
   #if (ENABLE_PRS == 1)
   radio__start_radio_rx_prs();
   #endif
-  radio_statistics__init();
-  radio_transmit__init();
-  radio_receive__init();
+  if (!radio_statistics__init()) {
+    return false;
+  }
+  if (!radio_transmit__init()) {
+    return false;
+  }
+  if (!radio_receive__init()) {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -270,7 +284,7 @@ static bool radio__run_pending_calibration(void)
   }
 
   RAIL_Handle_t rail_handle =
-      sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_INST);
+      sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_RAIL_HANDLE_INST);
   RAIL_Status_t status = RAIL_Calibrate(
       rail_handle, &radio_calibration_values, RAIL_CAL_ALL_PENDING);
 
@@ -295,7 +309,11 @@ static bool radio__run_pending_calibration(void)
  */
 bool radio__is_radio_busy(void)
 {
-  RAIL_Handle_t *rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_INST);
+  RAIL_Handle_t *rail_handle = sl_rail_util_get_handle(SL_RAIL_UTIL_HANDLE_RAIL_HANDLE_INST);
+  if (rail_handle == NULL)
+  {
+    return true;
+  }
   RAIL_RadioState_t state = RAIL_GetRadioState(rail_handle);
   if (((state == RAIL_RF_STATE_RX) || (state == RAIL_RF_STATE_IDLE) || (state == RAIL_RF_STATE_INACTIVE)))
   {

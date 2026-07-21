@@ -122,9 +122,9 @@ static uint32_t audio_intensity__sample_to_magnitude(uint32_t sample_value)
   return 0;
 }
 
-int32_t audio_intensity__init(bool little_endian_flag_param,
-                              uint32_t sample_size_bytes_param,
-                              uint32_t buffer_size_bytes_param) {
+bool audio_intensity__init(bool little_endian_flag_param,
+                           uint32_t sample_size_bytes_param,
+                           uint32_t buffer_size_bytes_param) {
   little_endian_flag = little_endian_flag_param;
   sample_size_bytes = sample_size_bytes_param;
   buffer_size_bytes = buffer_size_bytes_param;
@@ -133,7 +133,7 @@ int32_t audio_intensity__init(bool little_endian_flag_param,
   // return error.
   if (((buffer_size_bytes % sample_size_bytes) != 0) &&
       (buffer_size_bytes != 0)) {
-    return -1;
+    return false;
   }
 
   if (sample_size_bytes == 1) {
@@ -174,7 +174,7 @@ int32_t audio_intensity__init(bool little_endian_flag_param,
     low_level_threshold_lower =
         (0xFFFFFFFFUL - low_level_threshold_upper) >> 24;
   } else {
-    return -2; // Unsupported sample size
+    return false; // Unsupported sample size
   }
 
   last_timestamp_low_threshold_reached = 0;
@@ -184,7 +184,7 @@ int32_t audio_intensity__init(bool little_endian_flag_param,
   microsecond_timeout = 100000; // Hold threshold reached for 100ms
 
   library_initialized = true;
-  return 0;
+  return true;
 }
 
 uint32_t audio_intensity__get_intensity(void) {
